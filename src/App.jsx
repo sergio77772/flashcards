@@ -16,18 +16,29 @@ const generateId = () => Math.random().toString(36).slice(2, 9);
 
 export default function App() {
   const [bolillas, setBolillas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [screen, setScreen] = useState("home"); // home | bolilla | study | addBolilla | addCard | editCard
+  const [loading, setLoading] = useState(false);
+  
+  // screens: home | bolilla | study | addBolilla | addCard | editCard | quiz
+  const [screen, setScreen] = useState("home"); 
   const [activeBolillaId, setActiveBolillaId] = useState(null);
   const [activeCardIdx, setActiveCardIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  
   const [newBolillaName, setNewBolillaName] = useState("");
   const [newBolillaColor, setNewBolillaColor] = useState(0);
   const [cardFront, setCardFront] = useState("");
   const [cardBack, setCardBack] = useState("");
   const [editingCardId, setEditingCardId] = useState(null);
+  
   const [toast, setToast] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'bolilla'|'card', id }
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  // Quiz states
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [quizIdx, setQuizIdx] = useState(0);
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
 
   useEffect(() => {
     fetchBolillas();
@@ -35,6 +46,7 @@ export default function App() {
 
   const fetchBolillas = async () => {
     setLoading(true);
+    // Traemos de toda la base (para uso público sin login)
     const { data, error } = await supabase
       .from('bolillas')
       .select('*, flashcards(*)');
@@ -63,10 +75,10 @@ export default function App() {
     const newBolilla = { 
       id: generateId(), 
       name: newBolillaName.trim(), 
-      color_idx: newBolillaColor 
+      color_idx: newBolillaColor,
+      user_id: null // Sin login por ahora
     };
 
-    // Actualización optimista local
     const nbLocal = { ...newBolilla, colorIdx: newBolilla.color_idx, cards: [] };
     setBolillas(prev => [...prev, nbLocal]);
     setNewBolillaName("");
@@ -74,18 +86,15 @@ export default function App() {
     setScreen("home");
     showToast("¡Bolilla creada!");
 
-    // Guardar en Supabase
     await supabase.from('bolillas').insert([newBolilla]);
   };
 
   const deleteBolilla = async (id) => {
-    // Delete local
     setBolillas(prev => prev.filter(b => b.id !== id));
     setDeleteConfirm(null);
     setScreen("home");
     showToast("Bolilla eliminada", "error");
 
-    // Delete in Supabase
     await supabase.from('bolillas').delete().eq('id', id);
   };
 
@@ -154,7 +163,61 @@ export default function App() {
     setTimeout(() => setActiveCardIdx(i => (i - 1 + activeBolilla.cards.length) % activeBolilla.cards.length), 150);
   };
 
-  const color = activeBolilla ? COLORS[activeBolilla.colorIdx] : COLORS[0];
+  // --- LOGIC FOR MULTIPLE CHOICE QUIZ ---
+  const startQuiz = () => {
+    // Collect all cards from all Bolillas
+    const allCards = bolillas.flatMap(b => b.cards);
+    if (allCards.length < 4) {
+      showToast("Necesitas al menos 4 flashcards en total para iniciar un quiz.", "error");
+      return;
+    }
+
+    // Shuffle and pick up to 10 questions
+    const shuffled = [...allCards].sort(() => 0.5 - Math.random());
+    const selectedFlashcards = shuffled.slice(0, 10);
+
+    const qs = selectedFlashcards.map(fc => {
+      // Find 3 incorrect answers
+      const incorrectPool = allCards.filter(c => c.id !== fc.id);
+      const wrongAnswers = [...incorrectPool].sort(() => 0.5 - Math.random()).slice(0, 3).map(c => c.back);
+      
+      const options = [...wrongAnswers, fc.back].sort(() => 0.5 - Math.random());
+      
+      return {
+        question: fc.front,
+        correctAnswer: fc.back,
+        options
+      };
+    });
+
+    setQuizQuestions(qs);
+    setQuizIdx(0);
+    setQuizScore(0);
+    setQuizFinished(false);
+    setSelectedAnswer(null);
+    setScreen("quiz");
+  };
+
+  const handleQuizAnswer = (ans) => {
+    if (selectedAnswer !== null) return; // Prevent multiple clicks
+    setSelectedAnswer(ans);
+    
+    const isCorrect = ans === quizQuestions[quizIdx].correctAnswer;
+    if (isCorrect) setQuizScore(s => s + 1);
+
+    setTimeout(() => {
+      if (quizIdx + 1 < quizQuestions.length) {
+        setQuizIdx(i => i + 1);
+        setSelectedAnswer(null);
+      } else {
+        setQuizFinished(true);
+      }
+    }, 1200);
+  };
+
+  const color = activeBolilla ? COLORS[activeBolilla.colorIdx] || COLORS[0] : COLORS[0];
+
+  const totalCards = bolillas.flatMap(b=>b.cards).length;
 
   return (
     <div style={styles.root}>
@@ -167,6 +230,7 @@ export default function App() {
         .card-inner.flipped { transform: rotateY(180deg); }
         .card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius: 20px; padding: 28px; }
         .card-back-face { transform: rotateY(180deg); }
+        .btn-bounce { transition: transform 0.2s, opacity 0.2s; }
         .btn-bounce:active { transform: scale(0.93); }
         input, textarea { outline: none; font-family: 'DM Sans', sans-serif; }
         ::-webkit-scrollbar { display: none; }
@@ -174,8 +238,6 @@ export default function App() {
         .card-item:active { opacity: 0.8; }
         .toast-in { animation: toastIn .3s cubic-bezier(.4,2,.3,1) forwards; }
         @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(20px);} to {opacity:1; transform:translateX(-50%) translateY(0);} }
-        .shake:active { animation: shake .3s; }
-        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
       `}</style>
 
       {/* TOAST */}
@@ -206,13 +268,29 @@ export default function App() {
       {screen === "home" && (
         <div style={styles.screen}>
           <div style={styles.header}>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={styles.headerTitle}>Mis Bolillas ⚡</div>
               <div style={styles.headerSub}>
-                {loading ? "Sincronizando..." : `${bolillas.length} ${bolillas.length === 1 ? "tema" : "temas"}`}
+                {loading ? "Sincronizando..." : `${bolillas.length} temas guardados`}
               </div>
             </div>
-            <button className="btn-bounce" style={styles.addBtn} onClick={() => setScreen("addBolilla")}>+</button>
+            {totalCards >= 4 && (
+               <button className="btn-bounce" style={{...styles.studyBtn, background: "#45B7D1", fontSize: 16, padding: "16px 20px"}} onClick={startQuiz}>
+                 🧠 Test
+               </button>
+            )}
+          </div>
+
+          {!loading && totalCards < 4 ? (
+             <p style={{ padding: "0 24px 16px", color: "#666", fontSize: 13, textAlign: "center" }}>
+               💡 Añade al menos 4 flashcards en total para desbloquear el modo "Test" (Evaluación múltiple). Te faltan {4 - totalCards}.
+             </p>
+          ) : null}
+
+          <div style={{ padding: "0 24px", marginBottom: 16 }}>
+             <button className="btn-bounce" style={{...styles.primaryBtn, background: "#111"}} onClick={() => setScreen("addBolilla")}>
+               + Crear nueva bolilla
+             </button>
           </div>
 
           {loading ? (
@@ -223,7 +301,7 @@ export default function App() {
             <div style={styles.emptyState}>
               <div style={{ fontSize: 46 }}>🫧</div>
               <div style={styles.emptyTitle}>Sin bolillas todavía</div>
-              <div style={styles.emptySub}>Tocá el + para crear tu primer tema</div>
+              <div style={styles.emptySub}>Crea un tema para empezar a estudiar!</div>
             </div>
           ) : (
             <div style={styles.list}>
@@ -245,6 +323,96 @@ export default function App() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* QUIZ (MULTIPLE CHOICE) MODE */}
+      {screen === "quiz" && (
+        <div style={{ ...styles.screen, background: "#0f0f0f", color: "#fff" }}>
+           <div style={styles.studyTopBar}>
+             <button style={styles.studyBackBtn} onClick={() => { setScreen("home"); setSelectedAnswer(null); }}>✕</button>
+             <div style={styles.studyProgress}>
+                {!quizFinished ? `Pregunta ${quizIdx + 1} / ${quizQuestions.length}` : 'Resultados'}
+             </div>
+             <div style={{ width: 36 }} />
+           </div>
+
+           {!quizFinished ? (
+             <div style={{ padding: 24, flex: 1, display: "flex", flexDirection: "column" }}>
+               {/* PROGRESS BAR */}
+               <div style={{ height: 6, background: "#333", borderRadius: 3, marginBottom: 32, overflow: "hidden" }}>
+                 <div style={{ height: "100%", background: "#4ECDC4", width: `${((quizIdx) / quizQuestions.length) * 100}%`, transition: 'width 0.3s' }} />
+               </div>
+
+               {/* QUESTION */}
+               <div style={{ background: "#1a1a1a", padding: 24, borderRadius: 24, marginBottom: 24, flexShrink: 0 }}>
+                 <div style={{ fontSize: 13, color: "#888", marginBottom: 12, fontWeight: 700, letterSpacing: 1 }}>ELIGE LA OPCIÓN CORRECTA</div>
+                 <h2 style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.4 }}>{quizQuestions[quizIdx].question}</h2>
+               </div>
+
+               {/* OPTIONS */}
+               <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+                 {quizQuestions[quizIdx].options.map((opt, i) => {
+                    const isSelected = selectedAnswer === opt;
+                    const isCorrect = opt === quizQuestions[quizIdx].correctAnswer;
+                    
+                    let bgColor = "#1a1a1a";
+                    let borderColor = "#333";
+                    
+                    if (selectedAnswer !== null) {
+                      if (isCorrect) {
+                         bgColor = "#E0F7F6"; borderColor = "#4ECDC4";
+                      } else if (isSelected) {
+                         bgColor = "#FFE0E0"; borderColor = "#FF6B6B";
+                      }
+                    } else if (isSelected) {
+                       borderColor = "#fff";
+                    }
+
+                    return (
+                      <button 
+                        key={i} 
+                        className="btn-bounce"
+                        onClick={() => handleQuizAnswer(opt)}
+                        style={{
+                          background: bgColor,
+                          border: `2px solid ${borderColor}`,
+                          borderRadius: 20,
+                          padding: "20px 24px",
+                          color: (selectedAnswer !== null && (isCorrect || isSelected)) ? "#111" : "#fff",
+                          fontSize: 15,
+                          fontWeight: 600,
+                          textAlign: "left",
+                          cursor: selectedAnswer !== null ? "default" : "pointer",
+                          fontFamily: "'DM Sans', sans-serif"
+                        }}>
+                        {opt}
+                      </button>
+                    )
+                 })}
+               </div>
+             </div>
+           ) : (
+             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                <div style={{ fontSize: 72, marginBottom: 16 }}>{quizScore > quizQuestions.length / 2 ? '🏆' : '😅'}</div>
+                <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 8 }}>¡Completado!</h1>
+                <p style={{ color: "#aaa", fontSize: 16, marginBottom: 32 }}>Tu puntaje: {quizScore} de {quizQuestions.length}</p>
+                <button 
+                  className="btn-bounce" 
+                  style={{...styles.primaryBtn, background: "#4ECDC4", color: "#111"}}
+                  onClick={() => startQuiz()}
+                >
+                  Volver a jugar
+                </button>
+                <button 
+                  className="btn-bounce" 
+                  style={{...styles.primaryBtn, background: "transparent", color: "#fff", border: "2px solid #333", marginTop: 12}}
+                  onClick={() => setScreen("home")}
+                >
+                  Ir al inicio
+                </button>
+             </div>
+           )}
         </div>
       )}
 
@@ -367,7 +535,7 @@ export default function App() {
         </div>
       )}
 
-      {/* STUDY MODE */}
+      {/* STUDY MODE (FLIP CARDS) */}
       {screen === "study" && activeBolilla && activeBolilla.cards.length > 0 && (
         <div style={{ ...styles.screen, background: color.bg, justifyContent: "space-between" }}>
           <div style={styles.studyTopBar}>
@@ -414,7 +582,7 @@ const styles = {
   root: { fontFamily: "'Sora', sans-serif", maxWidth: 430, margin: "0 auto", minHeight: "100dvh", background: "#0f0f0f", color: "#111", position: "relative", overflow: "hidden" },
   screen: { display: "flex", flexDirection: "column", minHeight: "100dvh", background: "#f7f7f5" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "52px 24px 20px" },
-  headerTitle: { fontSize: 28, fontWeight: 800, color: "#111", letterSpacing: "-0.5px" },
+  headerTitle: { fontSize: 24, fontWeight: 800, color: "#111", letterSpacing: "-0.5px" },
   headerSub: { fontSize: 13, color: "#888", marginTop: 2 },
   addBtn: { width: 46, height: 46, borderRadius: 15, background: "#111", color: "#fff", border: "none", fontSize: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, fontFamily: "'Sora', sans-serif", fontWeight: 300 },
   list: { display: "flex", flexDirection: "column", gap: 12, padding: "8px 20px 120px", overflowY: "auto" },
@@ -445,7 +613,7 @@ const styles = {
   stat: { display: "flex", flexDirection: "column" },
   statNum: { fontSize: 28, fontWeight: 800, lineHeight: 1 },
   statLabel: { fontSize: 12, color: "#888" },
-  studyBtn: { borderRadius: 12, border: "none", padding: "12px 20px", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "'Sora', sans-serif" },
+  studyBtn: { borderRadius: 12, border: "none", padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "'Sora', sans-serif", boxShadow: "0 4px 14px rgba(0,0,0,0.15)" },
   cardItem: { display: "flex", alignItems: "center", background: "#fff", borderRadius: 16, padding: "16px", gap: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.06)", cursor: "pointer" },
   cardFrontText: { fontSize: 14, fontWeight: 600, color: "#222", marginBottom: 6, fontFamily: "'DM Sans', sans-serif" },
   cardBackText: { fontSize: 13, color: "#666", fontFamily: "'DM Sans', sans-serif" },
@@ -460,14 +628,6 @@ const styles = {
   modalSub: { fontSize: 14, color: "#888", marginTop: 8 },
   modalBtn: { flex: 1, borderRadius: 14, border: "none", padding: "14px", fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "'Sora', sans-serif" },
   studyTopBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "52px 24px 8px" },
-  studyBackBtn: { background: "rgba(0,0,0,0.2)", border: "none", borderRadius: 12, width: 36, height: 36, fontSize: 18, color: "#fff", cursor: "pointer" },
+  studyBackBtn: { background: "rgba(0,0,0,0.2)", border: "none", borderRadius: 12, width: 36, height: 36, fontSize: 18, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
   studyProgress: { fontSize: 15, fontWeight: 700, color: "#fff" },
-  progressBarWrap: { height: 4, background: "rgba(255,255,255,0.2)", margin: "0 24px 16px", borderRadius: 2, overflow: "hidden" },
-  progressBar: { height: "100%", borderRadius: 2, transition: "width .3s" },
-  studyHint: { textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.7)", padding: "0 24px" },
-  studyCardWrap: { padding: "0 24px" },
-  studyCardText: { fontSize: 18, fontWeight: 700, textAlign: "center", lineHeight: 1.5, color: "#222" },
-  studyControls: { display: "flex", gap: 12, padding: "0 24px", alignItems: "center" },
-  navBtn: { flex: 1, background: "rgba(0,0,0,0.2)", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "'Sora', sans-serif" },
-  flipBtn: { flex: 1, background: "transparent", border: "2px solid rgba(255,255,255,0.3)", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "'Sora', sans-serif" },
 };
