@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 
-export function useVoice(studyQueue, setScreen) {
+export function useVoice(studyQueue, screen, setScreen) {
   const [activeCardIdx, setActiveCardIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [isStudyFinished, setIsStudyFinished] = useState(false);
   const [audioIdx, setAudioIdx] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioStep, setAudioStep] = useState("front");
+  const [isStudyStarted, setIsStudyStarted] = useState(false);
 
   useEffect(() => {
     let t;
-    if (audioPlaying && setScreen === "audioRepaso") {
+    if (audioPlaying && screen === "audioRepaso") {
       const current = studyQueue[audioIdx];
       if (!current) {
         setAudioPlaying(false);
@@ -36,8 +37,13 @@ export function useVoice(studyQueue, setScreen) {
         }, 4500);
       }
     }
-    return () => clearTimeout(t);
-  }, [audioPlaying, audioIdx, audioStep, setScreen, studyQueue]);
+    return () => {
+      clearTimeout(t);
+      if (screen !== "audioRepaso") {
+        setAudioPlaying(false);
+      }
+    };
+  }, [audioPlaying, audioIdx, audioStep, screen, studyQueue]);
 
   const speakText = (text) => {
     if (!window.speechSynthesis) return;

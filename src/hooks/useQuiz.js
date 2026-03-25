@@ -35,7 +35,7 @@ export function useQuiz(setScreen) {
       return;
     }
 
-    const shuffled = [...allC].sort(() => 0.5 - Math.random()).slice(0, 10);
+    const shuffled = [...allC].sort(() => 0.5 - Math.random());
     const questions = shuffled.map((c) => {
       const otherBacks = allC.filter((o) => o.id !== c.id).map((o) => o.back);
       const options = [c.back, ...otherBacks.sort(() => 0.5 - Math.random()).slice(0, 3)].sort(() => 0.5 - Math.random());

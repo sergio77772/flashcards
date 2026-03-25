@@ -19,27 +19,27 @@ export const formatTime = (sec) => {
 
 export const TOUR_STEPS = [
   {
-    title: "🎯 Tu Objetivo",
-    msg: "Esta app usa Repetición Espaciada para que no olvides lo que estudias.",
+    title: "🚀 Bienvenido",
+    msg: "Esta app utiliza Repetición Espaciada para garantizar que nunca olvides lo que estudias.",
   },
   {
-    title: "📚 Materias y Bolillas",
-    msg: "Organiza tu programa en Materias. Cada materia tiene Bolillas (temas).",
+    title: "✨ Generación IA Ilimitada",
+    msg: "Extrae flashcards automáticamente desde cualquier PDF o texto sin límites. ¡Ahorra horas de trabajo!",
   },
   {
-    title: "✨ Generación con IA",
-    msg: "Sube un PDF o pega texto para crear flashcards automáticamente en segundos.",
+    title: "📚 Materias y Temas",
+    msg: "Organiza tu programa en Materias. Cada una contiene Bolillas para agrupar tus conceptos clave.",
   },
   {
-    title: "🧠 Modos de Estudio",
-    msg: "Usa el modo 'Estudiar' para memorizar, o 'Test' y 'Examen' para autoevaluarte.",
+    title: "🧠 Domina el Contenido",
+    msg: "Utiliza el modo 'Estudiar' para memorizar, o ponte a prueba con los modos 'Test' y 'Examen'.",
   },
   {
-    title: "🎧 Audio-Repaso",
-    msg: "¿Vas en el bus? Usa el audio-repaso manos libres para escuchar tus tarjetas.",
+    title: "🎧 Repaso Manos Libres",
+    msg: "¿En movimiento? Activa el Audio-Repaso para escuchar tus tarjetas mientras viajas o descansas.",
   },
   {
-    title: "📅 Gráfico de Previsión",
-    msg: "Mira cuántas tarjetas deberás repasar en los próximos días y alcanza tus metas.",
+    title: "📅 Gráfico de Progreso",
+    msg: "Visualiza tu carga de estudio semanal y mantén tu racha de aprendizaje viva cada día.",
   },
 ];

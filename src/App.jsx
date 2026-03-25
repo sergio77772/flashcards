@@ -45,7 +45,7 @@ export default function App() {
   const {
     quizQuestions, quizIdx, quizScore, quizFinished, selectedAnswer, isExam, examTimer,
     startQuiz, startExam, handleQuizAnswer, setIsExam, setSelectedAnswer
-  } = useQuiz(screen === "quiz" ? "quiz" : null);
+  } = useQuiz(setScreen);
 
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
@@ -56,13 +56,15 @@ export default function App() {
   const activeMateria = materias.find((m) => m.id === activeMateriaId);
   const activeBolilla = activeMateria?.bolillas?.find((b) => b.id === activeBolillaId);
   const color = COLORS[activeMateria?.colorIdx] || COLORS[0];
-  const studyQueue = activeBolilla?.cards || [];
+  const activeQueue = (screen === "bolilla" || screen === "study" || screen === "quiz") 
+    ? (activeBolilla?.cards || [])
+    : (activeMateria?.bolillas?.flatMap(b => b.cards || []) || []);
 
   const {
     activeCardIdx, setActiveCardIdx, flipped, setFlipped, isStudyFinished, setIsStudyFinished,
     audioIdx, setAudioIdx, audioPlaying, audioStep, setAudioStep,
     speakText, startStudy, startAudioRepaso, toggleAudio
-  } = useVoice(studyQueue, screen);
+  } = useVoice(activeQueue, screen, setScreen);
 
   const handleDelete = () => {
     if (deleteConfirm.type === "materia") deleteMateria(deleteConfirm.id);
@@ -101,7 +103,7 @@ export default function App() {
           activeMateria={activeMateria} activeMateriaId={activeMateriaId} color={color}
           setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
           setMateriaDeadline={(d) => setMateriaDeadline(activeMateriaId, d)}
-          setNewName={setNewName} startAudioRepaso={() => startAudioRepaso(studyQueue)}
+          setNewName={setNewName} startAudioRepaso={() => startAudioRepaso(activeQueue)}
           setIsExam={setIsExam} startQuiz={() => startQuiz("materia", materias, activeMateriaId)}
           startExam={() => startExam("materia", materias, activeMateriaId)}
           setActiveBolillaId={setActiveBolillaId}
@@ -114,7 +116,7 @@ export default function App() {
           setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
           setIsExam={setIsExam} startQuiz={() => startQuiz("bolilla", materias, activeMateriaId, activeBolillaId)}
           startExam={() => startExam("bolilla", materias, activeMateriaId, activeBolillaId)}
-          startStudy={() => startStudy(studyQueue)} setAiSuggestions={setAiSuggestions}
+          startStudy={() => startStudy(activeQueue)} setAiSuggestions={setAiSuggestions}
           setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
         />
       )}
@@ -183,11 +185,11 @@ export default function App() {
 
       {screen === "study" && (
         <StudyMode
-          isStudyFinished={isStudyFinished} activeCardIdx={activeCardIdx} studyQueue={studyQueue}
+          isStudyFinished={isStudyFinished} activeCardIdx={activeCardIdx} studyQueue={activeQueue}
           flipped={flipped} setFlipped={setFlipped} styles={styles}
           rateCard={(q) => {
-            rateCard(activeMateriaId, activeBolillaId, studyQueue[activeCardIdx].id, q, updateStudyStats);
-            if (activeCardIdx + 1 < studyQueue.length) { setActiveCardIdx(activeCardIdx + 1); setFlipped(false); }
+            rateCard(activeMateriaId, activeBolillaId, activeQueue[activeCardIdx].id, q, updateStudyStats);
+            if (activeCardIdx + 1 < activeQueue.length) { setActiveCardIdx(activeCardIdx + 1); setFlipped(false); }
             else setIsStudyFinished(true);
           }}
           speakText={speakText} setScreen={setScreen} color={color}
@@ -196,7 +198,7 @@ export default function App() {
 
       {screen === "audioRepaso" && (
         <AudioRepaso
-          studyQueue={studyQueue} audioIdx={audioIdx} audioPlaying={audioPlaying} audioStep={audioStep}
+          studyQueue={activeQueue} audioIdx={audioIdx} audioPlaying={audioPlaying} audioStep={audioStep}
           setAudioIdx={setAudioIdx} setAudioStep={setAudioStep} toggleAudio={toggleAudio}
           setScreen={setScreen} styles={styles}
         />
