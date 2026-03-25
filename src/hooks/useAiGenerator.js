@@ -18,6 +18,7 @@ export function useAiGenerator(showToast) {
   const [aiTipsLoading, setAiTipsLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [aiBatchProgress, setAiBatchProgress] = useState(null); // { current: number, total: number }
 
   const handlePdfUpload = async (e) => {
     const file = e.target.files[0];
@@ -69,30 +70,67 @@ export function useAiGenerator(showToast) {
   const generateWithAI = async () => {
     if (!aiApiKey) return showToast("Falta API Key", "error");
     setAiLoading(true);
+    setAiSuggestions([]);
+    
     try {
       const genAI = new GoogleGenerativeAI(aiApiKey);
       const model = genAI.getGenerativeModel(
         { model: "gemini-2.0-flash" },
         { apiVersion: "v1" },
       );
-      
-      const prompt = `Analiza la siguiente información (texto y/o imagen) y genera todas las flashcards que sean necesarias para cubrir los puntos clave (pregunta y respuesta corta). 
-        Usa formato JSON puro: [ { "id": "id_unico", "front": "...", "back": "..." } ]
-        Información textual: ${aiInputText}`;
 
-      const contents = [{ role: "user", parts: [{ text: prompt }] }];
+      // Si hay imagen, hacemos un solo pedido (prioridad a la imagen)
       if (aiImage) {
-        contents[0].parts.push({ inlineData: aiImage });
-      }
+        const prompt = `Analiza la información de la imagen y el texto adjunto para generar todas las flashcards necesarias. 
+          Usa formato JSON puro: [ { "front": "...", "back": "..." } ]
+          Texto adjunto: ${aiInputText}`;
+        const contents = [{ role: "user", parts: [{ text: prompt }, { inlineData: aiImage }] }];
+        const res = await model.generateContent({ contents });
+        const text = res.response.text();
+        const cleanJson = text.substring(text.indexOf("["), text.lastIndexOf("]") + 1);
+        const parsed = JSON.parse(cleanJson).map((s) => ({ ...s, id: generateId(), selected: true }));
+        setAiSuggestions(parsed);
+      } else {
+        // Si es solo texto y es largo, dividimos por lotes
+        const CHUNK_SIZE = 12000; // Aprox 4-5 páginas de texto denso
+        const chunks = [];
+        for (let i = 0; i < aiInputText.length; i += CHUNK_SIZE) {
+          chunks.push(aiInputText.substring(i, i + CHUNK_SIZE));
+        }
 
-      const res = await model.generateContent({ contents });
-      const text = res.response.text();
-      const cleanJson = text.substring(text.indexOf("["), text.lastIndexOf("]") + 1);
-      const parsed = JSON.parse(cleanJson).map((s) => ({ ...s, id: generateId(), selected: true }));
-      setAiSuggestions(parsed);
-      showToast("Flashcards sugeridas correctamente");
+        const allSuggestions = [];
+        setAiBatchProgress({ current: 1, total: chunks.length });
+
+        for (let i = 0; i < chunks.length; i++) {
+          setAiBatchProgress({ current: i + 1, total: chunks.length });
+          const prompt = `Analiza este fragmento del material de estudio y genera flashcards precisas (pregunta y respuesta corta). 
+            Parte ${i + 1} de ${chunks.length}.
+            Usa formato JSON puro: [ { "front": "...", "back": "..." } ]
+            Contenido: ${chunks[i]}`;
+
+          try {
+            const res = await model.generateContent(prompt);
+            const text = res.response.text();
+            const startIdx = text.indexOf("[");
+            const endIdx = text.lastIndexOf("]") + 1;
+            
+            if (startIdx !== -1 && endIdx !== -1) {
+              const cleanJson = text.substring(startIdx, endIdx);
+              const parsed = JSON.parse(cleanJson).map((s) => ({ ...s, id: generateId(), selected: true }));
+              allSuggestions.push(...parsed);
+              // Actualizamos vista parcial
+              setAiSuggestions([...allSuggestions]);
+            }
+          } catch (chunkErr) {
+            console.error("Error en lote:", i, chunkErr);
+          }
+        }
+        setAiBatchProgress(null);
+      }
+      showToast("Generación finalizada correctamente");
     } catch (e) {
       showToast("Error generación IA", "error");
+      setAiBatchProgress(null);
     }
     setAiLoading(false);
   };
@@ -174,5 +212,6 @@ export function useAiGenerator(showToast) {
     updateSuggestion,
     removeSuggestion,
     addManualSuggestion,
+    aiBatchProgress,
   };
 }

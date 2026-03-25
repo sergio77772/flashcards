@@ -52,7 +52,7 @@ export default function App() {
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
     aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips,
-    askAiTutor, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion,
+    askAiTutor, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
   } = useAiGenerator(showToast);
 
   const activeMateria = materias.find((m) => m.id === activeMateriaId);
@@ -191,6 +191,7 @@ export default function App() {
           handlePdfUpload={handlePdfUpload} generateWithAI={generateWithAI} styles={styles}
           toggleSelectSuggestion={toggleSelectSuggestion} updateSuggestion={updateSuggestion}
           removeSuggestion={removeSuggestion} addManualSuggestion={addManualSuggestion}
+          aiBatchProgress={aiBatchProgress}
           saveAiFlashcards={async () => {
             const selected = aiSuggestions.filter(s => s.selected);
             setAiLoading(true);

@@ -20,6 +20,7 @@ export default function AIGenerator({
   saveAiFlashcards,
   setScreen,
   styles,
+  aiBatchProgress,
 }) {
   const [showApiKey, setShowApiKey] = React.useState(!aiApiKey);
 
@@ -28,7 +29,12 @@ export default function AIGenerator({
       {aiLoading && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(8,8,16,0.85)", backdropFilter: "blur(12px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
           <div className="loader-card" />
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#9090c0" }}>Generando flashcards<span className="loading-dots" /></div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#9090c0" }}>
+            {aiBatchProgress 
+              ? `Generando parte ${aiBatchProgress.current} de ${aiBatchProgress.total}...` 
+              : "Generando flashcards"}
+            <span className="loading-dots" />
+          </div>
         </div>
       )}
       <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)", marginBottom: 4 }}>
