@@ -48,8 +48,8 @@ export default function App() {
   } = useQuiz(setScreen);
 
   const {
-    aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
-    handlePdfUpload, generateWithAI, toggleSelectSuggestion, updateSuggestion, removeSuggestion,
+    aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
+    handlePdfUpload, handleImageUpload, generateWithAI, toggleSelectSuggestion, updateSuggestion, removeSuggestion,
     addManualSuggestion,
   } = useAiGenerator(showToast);
 
@@ -165,6 +165,7 @@ export default function App() {
       {screen === "aiGenerator" && (
         <AIGenerator
           aiApiKey={aiApiKey} setAiApiKey={setAiApiKey} aiInputText={aiInputText} setAiInputText={setAiInputText}
+          aiImage={aiImage} setAiImage={setAiImage} handleImageUpload={handleImageUpload}
           aiLoading={aiLoading} aiSuggestions={aiSuggestions} setAiSuggestions={setAiSuggestions}
           handlePdfUpload={handlePdfUpload} generateWithAI={generateWithAI} styles={styles}
           toggleSelectSuggestion={toggleSelectSuggestion} updateSuggestion={updateSuggestion}
@@ -203,6 +204,47 @@ export default function App() {
           setScreen={setScreen} styles={styles}
         />
       )}
+
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sora', sans-serif; }
+        
+        @keyframes toastIn { 
+          from { opacity: 0; transform: translateY(20px) translateX(-50%); } 
+          to { opacity: 1; transform: translateY(0) translateX(-50%); } 
+        }
+        .toast-in { animation: toastIn 0.3s ease-out forwards; }
+        
+        .btn-bounce { transition: transform 0.1s; cursor: pointer; }
+        .btn-bounce:active { transform: scale(0.95); }
+        
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .loader-card { 
+          width: 48px; height: 48px; border: 4px solid #f3f3f3; 
+          border-top: 4px solid #A29BFE; border-radius: 50%; 
+          animation: rotate 1s linear infinite; margin-bottom: 20px;
+        }
+        
+        @keyframes dots { 
+          0%, 20% { content: "."; } 40% { content: ".."; } 60% { content: "..."; } 80%, 100% { content: ""; } 
+        }
+        .loading-dots::after { content: "."; animation: dots 1.5s infinite; }
+
+        /* 3D CARD FLIP */
+        .card-flip { perspective: 1000px; width: 100%; display: flex; justify-content: center; }
+        .card-inner {
+          position: relative; width: 100%; height: 100%;
+          transition: transform 0.6s; transform-style: preserve-3d;
+        }
+        .card-inner.flipped { transform: rotateY(180deg); }
+        .card-face {
+          position: absolute; top: 0; left: 0; 
+          width: 100%; height: 100%;
+          backface-visibility: hidden; -webkit-backface-visibility: hidden;
+          display: flex; align-items: center; justify-content: center;
+          border: 1px solid rgba(0,0,0,0.05); /* To separate from background */
+        }
+        .card-back-face { transform: rotateY(180deg); }
+      `}</style>
     </div>
   );
 }

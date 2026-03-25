@@ -11,6 +11,7 @@ export function useAiGenerator(showToast) {
     import.meta.env.VITE_GEMINI_API_KEY || "",
   );
   const [aiInputText, setAiInputText] = useState("");
+  const [aiImage, setAiImage] = useState(null); // { data: string, mimeType: string }
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
 
@@ -49,6 +50,18 @@ export function useAiGenerator(showToast) {
     }
   };
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result.split(',')[1];
+      setAiImage({ data: base64, mimeType: file.type });
+      showToast("Imagen cargada");
+    };
+    reader.readAsDataURL(file);
+  };
+
   const generateWithAI = async () => {
     if (!aiApiKey) return showToast("Falta API Key", "error");
     setAiLoading(true);
@@ -58,10 +71,17 @@ export function useAiGenerator(showToast) {
         { model: "gemini-2.0-flash" },
         { apiVersion: "v1" },
       );
-      const prompt = `Analiza el siguiente texto y genera todas las flashcards que sean necesarias para cubrir los puntos clave (pregunta y respuesta corta). 
+      
+      const prompt = `Analiza la siguiente información (texto y/o imagen) y genera todas las flashcards que sean necesarias para cubrir los puntos clave (pregunta y respuesta corta). 
         Usa formato JSON puro: [ { "id": "id_unico", "front": "...", "back": "..." } ]
-        Texto: ${aiInputText}`;
-      const res = await model.generateContent(prompt);
+        Información textual: ${aiInputText}`;
+
+      const contents = [{ role: "user", parts: [{ text: prompt }] }];
+      if (aiImage) {
+        contents[0].parts.push({ inlineData: aiImage });
+      }
+
+      const res = await model.generateContent({ contents });
       const text = res.response.text();
       const cleanJson = text.substring(text.indexOf("["), text.lastIndexOf("]") + 1);
       const parsed = JSON.parse(cleanJson).map((s) => ({ ...s, id: generateId(), selected: true }));
@@ -95,9 +115,11 @@ export function useAiGenerator(showToast) {
   return {
     aiApiKey, setAiApiKey,
     aiInputText, setAiInputText,
+    aiImage, setAiImage,
     aiLoading, setAiLoading,
     aiSuggestions, setAiSuggestions,
     handlePdfUpload,
+    handleImageUpload,
     generateWithAI,
     toggleSelectSuggestion,
     updateSuggestion,

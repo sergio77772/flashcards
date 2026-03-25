@@ -5,6 +5,9 @@ export default function AIGenerator({
   setAiApiKey,
   aiInputText,
   setAiInputText,
+  aiImage,
+  setAiImage,
+  handleImageUpload,
   aiLoading,
   aiSuggestions,
   setAiSuggestions,
@@ -65,33 +68,76 @@ export default function AIGenerator({
           Consíguela gratis en makersuite.google.com
         </div>
 
-        <label style={styles.label}>2. Sube un PDF o pega tu texto</label>
-        <div style={{ marginBottom: 16 }}>
-          <input
-            type="file"
-            accept=".pdf"
-            id="pdf-upload"
-            style={{ display: "none" }}
-            onChange={handlePdfUpload}
-          />
-          <label
-            htmlFor="pdf-upload"
-            style={{
-              display: "block",
-              background: "#f0f0f0",
-              border: "2px dashed #ccc",
-              padding: "20px",
-              borderRadius: 16,
-              textAlign: "center",
-              cursor: "pointer",
-              color: "#666",
-            }}
-          >
-            {aiLoading
-              ? "⏳ Procesando documento..."
-              : "📂 Subir PDF para analizar"}
-          </label>
+        <label style={styles.label}>2. Sube un PDF, foto o pega tu texto</label>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <input
+              type="file"
+              accept=".pdf"
+              id="pdf-upload"
+              style={{ display: "none" }}
+              onChange={handlePdfUpload}
+            />
+            <label
+              htmlFor="pdf-upload"
+              style={{
+                display: "block",
+                background: "#f0f0f0",
+                border: "2px dashed #ccc",
+                padding: "16px 12px",
+                borderRadius: 16,
+                textAlign: "center",
+                cursor: "pointer",
+                color: "#666",
+                fontSize: 13,
+              }}
+            >
+              {aiLoading ? "⏳ ..." : "📂 PDF"}
+            </label>
+          </div>
+          <div style={{ flex: 1 }}>
+            <input
+              type="file"
+              accept="image/*"
+              id="img-upload"
+              style={{ display: "none" }}
+              onChange={handleImageUpload}
+            />
+            <label
+              htmlFor="img-upload"
+              style={{
+                display: "block",
+                background: aiImage ? "#E0F7F6" : "#f0f0f0",
+                border: aiImage ? "2px solid #4ECDC4" : "2px dashed #ccc",
+                padding: "16px 12px",
+                borderRadius: 16,
+                textAlign: "center",
+                cursor: "pointer",
+                color: aiImage ? "#4ECDC4" : "#666",
+                fontSize: 13,
+                fontWeight: aiImage ? 700 : 400,
+              }}
+            >
+              {aiImage ? "✅ Foto" : "📸 Foto"}
+            </label>
+          </div>
         </div>
+
+        {aiImage && (
+          <div style={{ position: "relative", marginBottom: 16 }}>
+            <img
+              src={`data:${aiImage.mimeType};base64,${aiImage.data}`}
+              style={{ width: "100%", borderRadius: 16, maxHeight: 150, objectFit: "cover" }}
+              alt="Preview"
+            />
+            <button
+              style={{ position: "absolute", top: 8, right: 8, background: "#FF7675", color: "#fff", border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer" }}
+              onClick={() => setAiImage(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         <textarea
           style={{ ...styles.textarea, height: 180 }}
@@ -104,11 +150,11 @@ export default function AIGenerator({
           className="btn-bounce"
           style={{
             ...styles.primaryBtn,
-            background: aiInputText.trim() && aiApiKey ? "#A29BFE" : "#333",
+            background: (aiInputText.trim() || aiImage) && aiApiKey ? "#A29BFE" : "#333",
             marginTop: 20,
           }}
           onClick={generateWithAI}
-          disabled={aiLoading || !aiInputText.trim() || !aiApiKey}
+          disabled={aiLoading || (!aiInputText.trim() && !aiImage) || !aiApiKey}
         >
           {aiLoading ? "Generando..." : "🚀 Generar Flashcards"}
         </button>
