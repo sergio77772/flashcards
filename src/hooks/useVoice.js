@@ -10,47 +10,51 @@ export function useVoice(studyQueue, screen, setScreen) {
   const [isStudyStarted, setIsStudyStarted] = useState(false);
 
   useEffect(() => {
-    let t;
+    if (screen !== "audioRepaso") {
+      setAudioPlaying(false);
+      window.speechSynthesis.cancel();
+    }
+  }, [screen]);
+
+  useEffect(() => {
     if (audioPlaying && screen === "audioRepaso") {
       const current = studyQueue[audioIdx];
       if (!current) {
         setAudioPlaying(false);
         return;
       }
+
       if (audioStep === "front") {
-        speakText(current.front);
-        t = setTimeout(() => setAudioStep("wait"), 3500);
+        speakText(current.front, () => {
+          setTimeout(() => setAudioStep("wait"), 500);
+        });
       } else if (audioStep === "wait") {
-        t = setTimeout(() => setAudioStep("back"), 1500);
+        const t = setTimeout(() => setAudioStep("back"), 2000);
+        return () => clearTimeout(t);
       } else if (audioStep === "back") {
-        speakText(current.back);
-        t = setTimeout(() => {
-          if (audioIdx + 1 < studyQueue.length) {
-            setAudioIdx(audioIdx + 1);
-            setAudioStep("front");
-          } else {
-            setAudioPlaying(false);
-            setAudioIdx(0);
-            setAudioStep("front");
-            alert("Repaso de audio finalizado");
-          }
-        }, 4500);
+        speakText(current.back, () => {
+          setTimeout(() => {
+            if (audioIdx + 1 < studyQueue.length) {
+              setAudioIdx(audioIdx + 1);
+              setAudioStep("front");
+            } else {
+              setAudioPlaying(false);
+              setAudioIdx(0);
+              setAudioStep("front");
+            }
+          }, 1000);
+        });
       }
     }
-    return () => {
-      clearTimeout(t);
-      if (screen !== "audioRepaso") {
-        setAudioPlaying(false);
-      }
-    };
   }, [audioPlaying, audioIdx, audioStep, screen, studyQueue]);
 
-  const speakText = (text) => {
+  const speakText = (text, onEnd) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "es-ES";
-    utterance.rate = 0.95;
+    utterance.rate = 1.0;
+    if (onEnd) utterance.onend = onEnd;
     window.speechSynthesis.speak(utterance);
   };
 
