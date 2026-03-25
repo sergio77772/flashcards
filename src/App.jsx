@@ -1,1374 +1,206 @@
-import { useState, useEffect } from "react";
-import { auth, googleProvider, db } from "./firebase";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as pdfjsLib from 'pdfjs-dist';
-import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
+import React, { useState } from "react";
+import { COLORS, TOUR_STEPS, formatTime } from "./constants";
+import { styles } from "./styles";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).toString();
+// Hooks
+import { useFlashcards } from "./hooks/useFlashcards";
+import { useQuiz } from "./hooks/useQuiz";
+import { useAiGenerator } from "./hooks/useAiGenerator";
+import { useVoice } from "./hooks/useVoice";
 
-const COLORS = [
-  { bg: "#FF6B6B", light: "#FFE0E0", name: "Rojo" },
-  { bg: "#4ECDC4", light: "#E0F7F6", name: "Verde Agua" },
-  { bg: "#45B7D1", light: "#E0F4FA", name: "Celeste" },
-  { bg: "#96CEB4", light: "#E8F5EE", name: "Verde" },
-  { bg: "#FFEAA7", light: "#FFFBE6", name: "Amarillo" },
-  { bg: "#DDA0DD", light: "#F8E8F8", name: "Violeta" },
-  { bg: "#F0A500", light: "#FFF3CC", name: "Naranja" },
-  { bg: "#74B9FF", light: "#E6F3FF", name: "Azul" },
-];
-
-const generateId = () => Math.random().toString(36).slice(2, 9);
+// Components
+import LoginScreen from "./components/LoginScreen";
+import MateriasScreen from "./components/MateriasScreen";
+import AdminScreen from "./components/AdminScreen";
+import MateriaDetailScreen from "./components/MateriaDetailScreen";
+import BolillaDetailScreen from "./components/BolillaDetailScreen";
+import QuizMode from "./components/QuizMode";
+import AIGenerator from "./components/AIGenerator";
+import StudyMode from "./components/StudyMode";
+import AudioRepaso from "./components/AudioRepaso";
+import { TourModal, DeleteModal } from "./components/Modals";
+import { AddMateriaForm, AddBolillaForm, CardForm } from "./components/Forms";
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState(null); // Para guardar roles (ej: "admin", "user")
-  const [authLoading, setAuthLoading] = useState(true);
-
-  // Datos
-  const [materias, setMaterias] = useState([]);
-  const [allUsers, setAllUsers] = useState([]); // Array de usuarios para el admin panel
-  const [loading, setLoading] = useState(false);
-  
-  // screens: home (materias) | materia (bolillas) | bolilla (cards) | study | addMateria | addBolilla | addCard | editCard | quiz | admin | aiGenerator
-  const [screen, setScreen] = useState("home"); 
+  const [screen, setScreen] = useState("home");
   const [activeMateriaId, setActiveMateriaId] = useState(null);
   const [activeBolillaId, setActiveBolillaId] = useState(null);
-  
-  const [activeCardIdx, setActiveCardIdx] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-  
   const [newName, setNewName] = useState("");
   const [newColorIdx, setNewColorIdx] = useState(0);
-  
   const [cardFront, setCardFront] = useState("");
   const [cardBack, setCardBack] = useState("");
   const [editingCardId, setEditingCardId] = useState(null);
-  
-  // SRS / Study Queue
-  const [studyQueue, setStudyQueue] = useState([]);
-  const [isStudyFinished, setIsStudyFinished] = useState(false);
-  
-  const [toast, setToast] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-  // Quiz states
-  const [quizQuestions, setQuizQuestions] = useState([]);
-  const [quizIdx, setQuizIdx] = useState(0);
-  const [quizScore, setQuizScore] = useState(0);
-  const [quizFinished, setQuizFinished] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
-
-  // Exam states
-  const [examTimer, setExamTimer] = useState(0);
-  const [examStartTime, setExamStartTime] = useState(null);
-  const [examResults, setExamResults] = useState([]); // { correct: boolean, time: number }
-  const [isExam, setIsExam] = useState(false); // Flag para diferenciar quiz de examen
-
-  // Tour state
-  const [tourIdx, setTourIdx] = useState(0);
   const [isTourOpen, setIsTourOpen] = useState(false);
-  
-  // AI Generator states
-  const [aiApiKey, setAiApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem("gemini_api_key") || "");
-  const [aiInputText, setAiInputText] = useState("");
-  const [aiSuggestions, setAiSuggestions] = useState([]); // { front, back }
-  const [aiLoading, setAiLoading] = useState(false);
-  
-  // Audio Repaso states
-  const [audioIdx, setAudioIdx] = useState(0);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioStep, setAudioStep] = useState(null); // 'front' | 'wait' | 'back'
-  
-  const tourSteps = [
-    { title: "¡Bienvenido! 📚", msg: "Esta es tu base de conocimiento. Aquí puedes agrupar tus estudios por Materias." },
-    { title: "Dashboard 📊", msg: "Aquí verás tus estadísticas: Racha 🔥, tarjetas Dominadas ✅ y tiempo total de estudio." },
-    { title: "Estructura 📂", msg: "Materia > Bolilla > Flashcards. Esta jerarquía te ayuda a organizar programas complejos." },
-    { title: "Progreso de Aprendizaje 📈", msg: "Cada materia y bolilla tiene una barra que muestra cuánto dominas el tema según el algoritmo SRS." },
-    { title: "Generador IA ✨", msg: "¡No pierdas tiempo! Sube un PDF o pega texto y la IA creará las flashcards por ti en segundos." },
-    { title: "Modo Audio Manos Libres 🎧", msg: "Escucha tus apuntes mientras haces otras cosas. La app leerá pregunta y respuesta sola." },
-    { title: "Exámenes y Tests 📝", msg: "Mide tu precisión con temporizador y evalúa tu conocimiento real antes del examen parcial." }
-  ];
+  const [tourIdx, setTourIdx] = useState(0);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        try {
-          // Guardar o leer usuario de Firestore para gestionar ROL (Admin/User)
-          const userRef = doc(db, "users", currentUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            const newData = { 
-              name: currentUser.displayName || "Usuario", 
-              email: currentUser.email, 
-              role: "user",
-              streak: 0,
-              lastStudyDate: null,
-              totalStudyTime: 0
-            };
-            await setDoc(userRef, newData);
-            setUserData(newData);
-            console.log("Nuevo usuario creado en la colección 'users'", newData);
-          } else {
-            setUserData(userSnap.data());
-          }
-        } catch (error) {
-          console.error("No se pudo iniciar la colección users (¿Quizás las Reglas de Firebase bloquean el acceso?):", error);
-        }
-        
-        fetchData(currentUser.uid);
-      } else {
-        setMaterias([]);
-        setUserData(null);
-        setAuthLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  const flashcards = useFlashcards();
+  const {
+    user, userData, materias, loading, authLoading, allUsers, toast,
+    loginGoogle, logout, addMateria, deleteMateria, addBolilla, deleteBolilla,
+    addCard, addCards, saveEditCard, deleteCard, rateCard, setMateriaDeadline,
+    updateStudyStats, openAdmin, changeUserRole, setToast, showToast
+  } = flashcards;
 
-  useEffect(() => {
-    let interval;
-    if (screen === "quiz" && isExam && !quizFinished) {
-      interval = setInterval(() => {
-        setExamTimer(prev => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [screen, isExam, quizFinished]);
+  const {
+    quizQuestions, quizIdx, quizScore, quizFinished, selectedAnswer, isExam, examTimer,
+    startQuiz, startExam, handleQuizAnswer, setIsExam, setSelectedAnswer
+  } = useQuiz(screen === "quiz" ? "quiz" : null);
 
-  const [audioTimer, setAudioTimer] = useState(null);
+  const {
+    aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
+    handlePdfUpload, generateWithAI, toggleSelectSuggestion, updateSuggestion, removeSuggestion,
+    addManualSuggestion,
+  } = useAiGenerator(showToast);
 
-  useEffect(() => {
-    if (screen === "audioRepaso" && audioPlaying) {
-      const currentCard = studyQueue[audioIdx];
-      if (!currentCard) {
-        setAudioPlaying(false);
-        setScreen("home");
-        showToast("Sesión de audio finalizada");
-        return;
-      }
+  const activeMateria = materias.find((m) => m.id === activeMateriaId);
+  const activeBolilla = activeMateria?.bolillas?.find((b) => b.id === activeBolillaId);
+  const color = COLORS[activeMateria?.colorIdx] || COLORS[0];
+  const studyQueue = activeBolilla?.cards || [];
 
-      if (audioStep === "front") {
-        speakText(currentCard.front);
-        const t = setTimeout(() => setAudioStep("wait"), 3500); // 3.5s para pensar
-        setAudioTimer(t);
-      } else if (audioStep === "wait") {
-        const t = setTimeout(() => setAudioStep("back"), 2000); // Pequeña pausa extra
-        setAudioTimer(t);
-      } else if (audioStep === "back") {
-        speakText(currentCard.back);
-        const t = setTimeout(() => {
-          if (audioIdx + 1 < studyQueue.length) {
-            setAudioIdx(prev => prev + 1);
-            setAudioStep("front");
-          } else {
-            setAudioPlaying(false);
-            showToast("Fin del repaso");
-          }
-        }, 5000); // 5s antes de la siguiente
-        setAudioTimer(t);
-      }
-    } else {
-      clearTimeout(audioTimer);
-    }
-    return () => clearTimeout(audioTimer);
-  }, [screen, audioPlaying, audioStep, audioIdx]);
-  const fetchData = async (uid) => {
-    setLoading(true);
-    setAuthLoading(false);
-    try {
-      const q = query(collection(db, "materias"), where("user_id", "==", uid));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      const formatted = data.map(m => ({
-        ...m,
-        bolillas: (m.bolillas || []).map(b => ({
-          ...b,
-          cards: (b.cards || []).map(c => ({
-            ...c,
-            nextReview: c.nextReview || Date.now(),
-            interval: c.interval || 0
-          }))
-        }))
-      }));
-      setMaterias(formatted);
-    } catch (e) {
-      console.error("Error fetching", e);
-    }
-    setLoading(false);
-  };
+  const {
+    activeCardIdx, setActiveCardIdx, flipped, setFlipped, isStudyFinished, setIsStudyFinished,
+    audioIdx, setAudioIdx, audioPlaying, audioStep, setAudioStep,
+    speakText, startStudy, startAudioRepaso, toggleAudio
+  } = useVoice(studyQueue, screen);
 
-  const loginGoogle = async () => {
-    try { await signInWithPopup(auth, googleProvider); } catch (e) { showToast("Error al hacer login", "error"); }
-  };
-  const logout = async () => { await signOut(auth); };
-  const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2000); };
-
-  // --- ADMIN PANEL FLAGS ---
-  const openAdmin = async () => {
-    setScreen("admin");
-    const snap = await getDocs(collection(db, "users"));
-    setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
-  };
-
-  const changeUserRole = async (uid, newRole) => {
-    try {
-      await updateDoc(doc(db, "users", uid), { role: newRole });
-      setAllUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: newRole } : u));
-      if (user.uid === uid) setUserData(prev => ({ ...prev, role: newRole })); // Actualiza al admin actual
-      showToast("Rol actualizado con éxito");
-    } catch (e) {
-      showToast("Error al actualizar rol", "error");
-    }
-  };
-
-  // --- FIREBASE SYNC ---
-  const syncMateria = async (updatedMateria) => {
-    try { await setDoc(doc(db, "materias", updatedMateria.id), updatedMateria); } 
-    catch (e) { console.error(e); showToast("Error subiendo datos", "error"); }
-  };
-
-  // --- MATERIAS ---
-  const addMateria = () => {
-    if (!newName.trim()) return;
-    const newMateria = { id: generateId(), name: newName.trim(), colorIdx: newColorIdx, user_id: user.uid, bolillas: [] };
-    setMaterias(prev => [...prev, newMateria]);
-    setNewName(""); setNewColorIdx(0); setScreen("home");
-    showToast("¡Materia creada!");
-    syncMateria(newMateria);
-  };
-
-  const deleteMateria = async (id) => {
-    setMaterias(prev => prev.filter(m => m.id !== id));
-    setDeleteConfirm(null); setScreen("home");
-    showToast("Materia eliminada", "error");
-    await deleteDoc(doc(db, "materias", id));
-  };
-
-  // --- BOLILLAS ---
-  const addBolilla = () => {
-    if (!newName.trim()) return;
-    const newBolilla = { id: generateId(), name: newName.trim(), cards: [] };
-    const updatedMateria = { ...activeMateria, bolillas: [...(activeMateria.bolillas || []), newBolilla] };
-    
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    setNewName(""); setScreen("materia");
-    showToast("¡Bolilla creada!");
-    syncMateria(updatedMateria);
-  };
-
-  const deleteBolilla = (bolillaId) => {
-    const updatedMateria = { ...activeMateria, bolillas: activeMateria.bolillas.filter(b => b.id !== bolillaId) };
-    
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
+  const handleDelete = () => {
+    if (deleteConfirm.type === "materia") deleteMateria(deleteConfirm.id);
+    else if (deleteConfirm.type === "bolilla") deleteBolilla(activeMateriaId, deleteConfirm.id);
+    else deleteCard(activeMateriaId, activeBolillaId, deleteConfirm.id);
     setDeleteConfirm(null);
-    showToast("Bolilla eliminada", "error");
-    syncMateria(updatedMateria);
   };
 
-  // --- CARDS ---
-  const addCard = () => {
-    if (!cardFront.trim() || !cardBack.trim()) return;
-    const newCard = { 
-      id: generateId(), 
-      front: cardFront.trim(), 
-      back: cardBack.trim(),
-      nextReview: Date.now(),
-      interval: 0
-    };
-    const updatedMateria = {
-      ...activeMateria, 
-      bolillas: activeMateria.bolillas.map(b => b.id === activeBolillaId ? { ...b, cards: [...(b.cards || []), newCard] } : b)
-    };
-
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    setCardFront(""); setCardBack(""); setScreen("bolilla");
-    showToast("Flashcard agregada!");
-    syncMateria(updatedMateria);
-  };
-
-  const saveEditCard = () => {
-    if (!cardFront.trim() || !cardBack.trim()) return;
-    const updatedMateria = {
-      ...activeMateria,
-      bolillas: activeMateria.bolillas.map(b => b.id === activeBolillaId ? {
-        ...b, cards: b.cards.map(c => c.id === editingCardId ? { ...c, front: cardFront.trim(), back: cardBack.trim() } : c)
-      } : b)
-    };
-
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    setScreen("bolilla"); showToast("Flashcard actualizada!");
-    syncMateria(updatedMateria);
-    setCardFront(""); setCardBack(""); setEditingCardId(null);
-  };
-
-  const deleteCard = (cardId) => {
-    const updatedMateria = {
-      ...activeMateria,
-      bolillas: activeMateria.bolillas.map(b => b.id === activeBolillaId ? { ...b, cards: b.cards.filter(c => c.id !== cardId) } : b)
-    };
-
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    setDeleteConfirm(null); showToast("Flashcard eliminada", "error");
-    syncMateria(updatedMateria);
-  };
-
-  const updateStreakAndStats = async (secondsToAdd) => {
-    if (!userData) return;
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const lastStr = userData.lastStudyDate;
-    
-    let newStreak = userData.streak || 0;
-    if (!lastStr) {
-      newStreak = 1;
-    } else {
-      const lastDate = new Date(lastStr);
-      const diff = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
-      if (diff === 1) newStreak += 1; // Racha sigue
-      else if (diff > 1) newStreak = 1; // Racha se rompió
-    }
-
-    const updated = {
-      ...userData,
-      streak: newStreak,
-      lastStudyDate: todayStr,
-      totalStudyTime: (userData.totalStudyTime || 0) + secondsToAdd
-    };
-    setUserData(updated);
-    await updateDoc(doc(db, "users", user.uid), {
-      streak: newStreak,
-      lastStudyDate: todayStr,
-      totalStudyTime: updated.totalStudyTime
-    });
-  };
-
-  const setMateriaDeadline = async (date) => {
-    const updatedMateria = { ...activeMateria, examDate: date };
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    syncMateria(updatedMateria);
-    showToast("Fecha de examen guardada");
-  };
-
-  // --- HELPERS ---
-  const activeMateria = materias.find(m => m.id === activeMateriaId);
-  const activeBolilla = activeMateria?.bolillas?.find(b => b.id === activeBolillaId);
-  const color = activeMateria ? COLORS[activeMateria.colorIdx] || COLORS[0] : COLORS[0];
-  const totalCards = materias.flatMap(m => m.bolillas || []).flatMap(b => b.cards || []).length;
-  const masteredCardsCount = materias.flatMap(m => m.bolillas || []).flatMap(b => b.cards || []).filter(c => (c.interval||0) >= 15).length;
-
-  const startStudy = () => {
-    const now = Date.now();
-    // Filtramos solo las que toca repasar (nextReview <= ahora)
-    const dueCards = (activeBolilla.cards || []).filter(c => c.nextReview <= now);
-    
-    if (dueCards.length === 0) {
-      showToast("¡Estás al día con esta bolilla!", "success");
-      // Opcional: permitir estudiar todo igual
-      setStudyQueue([...(activeBolilla.cards || [])]);
-    } else {
-      setStudyQueue([...dueCards].sort((a,b) => a.nextReview - b.nextReview));
-    }
-    
-    setActiveCardIdx(0); 
-    setFlipped(false); 
-    setIsStudyFinished(false);
-    setScreen("study");
-  };
-
-  const rateCard = (rating) => {
-    const card = studyQueue[activeCardIdx];
-    let newInterval = card.interval || 0;
-    let nextReview = Date.now();
-
-    if (rating === 0) { // No lo sabía
-      newInterval = 0;
-      nextReview = Date.now() + 10 * 1000; // 10 segundos para que reaparezca en la cola
-    } else if (rating === 1) { // Dudé
-      newInterval = 1; 
-      nextReview = Date.now() + 24 * 60 * 60 * 1000; // 1 día
-    } else if (rating === 2) { // Fácil
-      newInterval = newInterval === 0 ? 1 : newInterval === 1 ? 4 : newInterval * 2;
-      nextReview = Date.now() + newInterval * 24 * 60 * 60 * 1000;
-    }
-
-    const updatedCard = { ...card, interval: newInterval, nextReview };
-    
-    // Actualizar en base de datos
-    const updatedMateria = {
-      ...activeMateria,
-      bolillas: activeMateria.bolillas.map(b => b.id === activeBolillaId ? {
-        ...b, cards: b.cards.map(c => c.id === card.id ? updatedCard : c)
-      } : b)
-    };
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    syncMateria(updatedMateria);
-
-    // Lógica de navegación en la cola
-    if (rating === 0) {
-      // Si no lo sabía, la mandamos al final de la cola actual para que reaparezca
-      const newQueue = [...studyQueue];
-      newQueue.splice(activeCardIdx, 1);
-      newQueue.push(updatedCard);
-      setStudyQueue(newQueue);
-      setFlipped(false);
-      // No incrementamos idx porque el elemento actual fue removido/movido
-    } else {
-      if (activeCardIdx + 1 < studyQueue.length) {
-        setFlipped(false);
-        setTimeout(() => setActiveCardIdx(i => i + 1), 150);
-      } else {
-        finishStudySession();
-      }
-    }
-  };
-
-  const finishStudySession = () => {
-    setIsStudyFinished(true);
-    updateStreakAndStats(studyQueue.length * 10); // Estimado: 10s por tarjeta
-  };
-
-  const startAudioRepaso = (scope = "materia") => {
-    let targetCards = [];
-    if (scope === "bolilla" && activeBolilla) {
-      targetCards = activeBolilla.cards || [];
-    } else if (scope === "materia" && activeMateria) {
-      targetCards = (activeMateria.bolillas || []).flatMap(b => b.cards || []);
-    }
-    
-    if (targetCards.length === 0) { showToast("No hay tarjetas para leer", "error"); return; }
-    
-    // El reparto es el mismo de estudio: lo pendiente o domindado
-    setStudyQueue([...targetCards].sort(() => 0.5 - Math.random()));
-    setAudioIdx(0);
-    setAudioStep("front");
-    setAudioPlaying(true);
-    setScreen("audioRepaso");
-  };
-
-  const toggleAudio = () => {
-    if (audioPlaying) window.speechSynthesis.cancel();
-    setAudioPlaying(!audioPlaying);
-  };
-
-  // --- QUIZ ---
-  const startQuiz = (scope = "materia") => {
-    let targetCards = [];
-    if (scope === "bolilla" && activeBolilla) {
-      targetCards = activeBolilla.cards || [];
-    } else if (scope === "materia" && activeMateria) {
-      targetCards = (activeMateria.bolillas || []).flatMap(b => b.cards || []);
-    } else { return; }
-
-    if (targetCards.length < 4) { 
-      showToast(`${scope === "materia" ? "Esta materia" : "Esta bolilla"} necesita al menos 4 flashcards para generar un examen.`, "error"); 
-      return; 
-    }
-
-    const allCards = materias.flatMap(m => m.bolillas || []).flatMap(b => b.cards || []);
-    
-    const shuffled = [...targetCards].sort(() => 0.5 - Math.random());
-    const selected = shuffled;
-    const qs = selected.map(fc => {
-      const incorrectPool = allCards.filter(c => c.id !== fc.id);
-      // Pescamos máximo 3 opciones incorrectas, pero si hay menos, no pasa nada (usamos .slice)
-      const wrongAnswers = [...incorrectPool].sort(() => 0.5 - Math.random()).slice(0, 3).map(c => c.back);
-      return { question: fc.front, correctAnswer: fc.back, options: [...new Set([...wrongAnswers, fc.back])].sort(() => 0.5 - Math.random()) };
-    });
-    setQuizQuestions(qs); setQuizIdx(0); setQuizScore(0); setQuizFinished(false); setSelectedAnswer(null); setScreen("quiz");
-  };
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-
-  const handleQuizAnswer = (ans) => {
-    if (selectedAnswer !== null) return;
-    
-    const isCorrect = ans === quizQuestions[quizIdx].correctAnswer;
-    
-    if (isExam) {
-      // Modo Examen: Sin feedback inmediato, guardamos resultado y pasamos rápido
-      setQuizScore(s => isCorrect ? s + 1 : s);
-      if (quizIdx + 1 < quizQuestions.length) {
-        setQuizIdx(i => i + 1);
-      } else {
-        setQuizFinished(true);
-        updateStreakAndStats(isExam ? examTimer : quizQuestions.length * 5); // Guardar tiempo real si es examen
-      }
-    } else {
-      // Modo Quiz normal: Feedback visual
-      setSelectedAnswer(ans);
-      if (isCorrect) setQuizScore(s => s + 1);
-      setTimeout(() => {
-        if (quizIdx + 1 < quizQuestions.length) { 
-          setQuizIdx(i => i + 1); 
-          setSelectedAnswer(null); 
-        } else { 
-          setQuizFinished(true); 
-          updateStreakAndStats(quizQuestions.length * 10);
-        }
-      }, 1200);
-    }
-  };
-
-  const startExam = (scope = "materia") => {
-    setIsExam(true);
-    setExamTimer(0);
-    setExamStartTime(Date.now());
-    startQuiz(scope);
-  };
-
-  const generateWithAI = async () => {
-    if (!aiInputText.trim() || !aiApiKey) {
-      showToast("Ingresa texto y tu API Key", "error");
-      return;
-    }
-    setAiLoading(true);
-    localStorage.setItem("gemini_api_key", aiApiKey);
-    try {
-      const prompt = `Actúa como un profesor experto. Genera exactamente un array JSON de objetos flashcards {front: string, back: string} a partir del siguiente texto educativo. Las preguntas (front) deben ser directas y las respuestas (back) concisas. No incluyas explicaciones extras fuera del JSON. TEXTO: "${aiInputText}"`;
-      
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${aiApiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-          })
-        }
-      );
-
-      if (!response.ok) throw new Error("API falló");
-      
-      const result = await response.json();
-      const output = result.candidates[0].content.parts[0].text;
-      
-      // Limpiar Markdown si lo incluye el modelo
-      const jsonStr = output.replace(/```json/g, "").replace(/```/g, "").trim();
-      const parsed = JSON.parse(jsonStr);
-      
-      if (Array.isArray(parsed)) {
-        setAiSuggestions(parsed.map(s => ({ ...s, selected: true, id: generateId() })));
-        showToast("¡Flashcards generadas!");
-      } else {
-        throw new Error("Formato incorrecto");
-      }
-    } catch (e) {
-      console.error(e);
-      showToast("Error generando con la IA (v1 Flash)", "error");
-    }
-    setAiLoading(false);
-  };
-
-  const handlePdfUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.type !== "application/pdf") { showToast("Carga un archivo PDF válido", "error"); return; }
-    
-    setAiLoading(true);
-    setAiInputText("Leyendo PDF... por favor espera.");
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let fullText = "";
-      // Solo leemos las primeras 10-15 páginas para no saturar si el PDF es gigante
-      const pagesToRead = Math.min(pdf.numPages, 15);
-      for (let i = 1; i <= pagesToRead; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        fullText += textContent.items.map(item => item.str).join(" ") + " ";
-      }
-      setAiInputText(fullText.trim());
-      showToast("PDF leído con éxito");
-    } catch (e) {
-      console.error(e);
-      showToast("No se pudo leer el PDF", "error");
-      setAiInputText("");
-    }
-    setAiLoading(false);
-  };
-
-  const addManualSuggestion = () => {
-    setAiSuggestions(prev => [...prev, { front: "Nueva pregunta", back: "Respuesta...", selected: true, id: generateId() }]);
-  };
-
-  const updateSuggestion = (id, field, value) => {
-    setAiSuggestions(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
-  };
-
-  const toggleSelectSuggestion = (id) => {
-    setAiSuggestions(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s));
-  };
-
-  const removeSuggestion = (id) => {
-    setAiSuggestions(prev => prev.filter(s => s.id !== id));
-  };
-
-  const saveAiFlashcards = () => {
-    const selectedCards = aiSuggestions.filter(s => s.selected);
-    if (selectedCards.length === 0) {
-      showToast("No hay tarjetas seleccionadas", "error");
-      return;
-    }
-    const newCards = selectedCards.map(s => ({
-      id: generateId(),
-      front: s.front,
-      back: s.back,
-      nextReview: Date.now(),
-      interval: 0
-    }));
-    
-    const updatedMateria = {
-      ...activeMateria,
-      bolillas: activeMateria.bolillas.map(b => b.id === activeBolillaId ? {
-        ...b, cards: [...(b.cards || []), ...newCards]
-      } : b)
-    };
-    
-    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
-    syncMateria(updatedMateria);
-    setAiSuggestions([]);
-    setAiInputText("");
-    setScreen("bolilla");
-    showToast(`Se han guardado ${newCards.length} flashcards.`);
-  };
-
-  // --- TEXT TO SPEECH (TTS) ---
-  const speakText = (text) => {
-    if (!window.speechSynthesis) {
-      showToast("Tu navegador no soporta lectura por voz", "error");
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "es-ES"; // Español
-    utterance.rate = 0.95; // Un poco más lento para que sea más claro
-    window.speechSynthesis.speak(utterance);
-  };
-
-  // --- RENDER DASHBOARD ---
-  const renderDashboard = () => {
-    const allCards = materias.flatMap(m => m.bolillas || []).flatMap(b => b.cards || []);
-    const totalCards = allCards.length;
-    const mastered = allCards.filter(c => (c.interval || 0) >= 15).length;
-    
-    // Calcular próximos repasos
-    const upcoming = Array(7).fill(0);
-    allCards.forEach(c => {
-      const diff = Math.floor((c.nextReview - Date.now()) / (1000 * 60 * 60 * 24));
-      if (diff >= 0 && diff < 7) upcoming[diff]++;
-    });
-    const maxUpcoming = Math.max(...upcoming, 5);
-
-    // Recomendación
-    const nextExam = materias.filter(m => m.examDate).sort((a,b) => new Date(a.examDate) - new Date(b.examDate))[0];
-    let studyTip = "💡 Tip: Repasar 15 min al día mantiene tu racha viva.";
-    if (nextExam) {
-      const daysLeft = Math.ceil((new Date(nextExam.examDate) - Date.now()) / (1000 * 60 * 60 * 24));
-      const leftToMaster = totalCards - mastered;
-      if (daysLeft > 0 && leftToMaster > 0) {
-        studyTip = `🎯 Meta: Domina ${Math.ceil(leftToMaster/daysLeft)} tarjetas diarias para tu examen en ${daysLeft} días.`;
-      }
-    }
-
-    return (
-      <div style={styles.dashboardCard}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
-          <div style={styles.dashboardStat}>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{(userData?.streak || 0)}🔥</div>
-            <div style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>RACHA</div>
-          </div>
-          <div style={styles.dashboardStat}>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{mastered}✅</div>
-            <div style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>DOMINADAS</div>
-          </div>
-          <div style={styles.dashboardStat}>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{totalCards}📚</div>
-            <div style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>TOTAL</div>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 12, fontSize: 11, fontWeight: 800, color: "#333", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-           <span>PROGRESO DE APRENDIZAJE ✨</span>
-           <span style={{ color: "#A29BFE" }}>{Math.round((mastered/totalCards||0)*100)}%</span>
-        </div>
-        
-        <div style={{ position: "relative", height: 160, background: "rgba(162, 155, 254, 0.05)", borderRadius: 20, padding: 20, overflow: "hidden" }}>
-           {/* SVG Progress Curve */}
-           <svg style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: "100%", opacity: 0.3 }} viewBox="0 0 100 100" preserveAspectRatio="none">
-              <path d="M0,80 C20,70 40,90 60,60 C80,30 100,50 100,20 L100,100 L0,100 Z" fill="url(#grad)" />
-              <defs><linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#A29BFE" /><stop offset="100%" stopColor="transparent" /></linearGradient></defs>
-           </svg>
-           
-           <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "flex-end", gap: 10 }}>
-              {upcoming.map((count, i) => {
-                const h = (count / maxUpcoming) * 100;
-                return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: "100%", height: `${h}%`, background: i === 0 ? "#A29BFE" : "#fff", borderRadius: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", position: "relative" }}>
-                        {count > 0 && <div style={{ position: "absolute", top: -20, left: 0, right: 0, textAlign: "center", fontSize: 10, fontWeight: 800, color: "#111" }}>{count}</div>}
-                    </div>
-                    <div style={{ fontSize: 9, fontWeight: 800, color: i === 0 ? "#A29BFE" : "#888" }}>{["HOY","MAÑ","MAR","MIE","JUE","VIE","SAB"][i]}</div>
-                  </div>
-                )
-              })}
-           </div>
-        </div>
-
-        <div style={{ marginTop: 24, background: "#111", padding: 16, borderRadius: 16, borderLeft: "4px solid #A29BFE" }}>
-           <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", lineHeight: 1.4 }}>{studyTip}</div>
-        </div>
-      </div>
-    );
-  };
-
-  if (authLoading) return <div style={{...styles.root, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff"}}>Cargando sesión...</div>;
-  if (!user) return (
-    <div style={{ ...styles.root, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sora', sans-serif;}
-        .btn-google { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; color: #111; padding: 16px 24px; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer; border: none; width: 100%; transition: transform 0.2s; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
-        .btn-google:active { transform: scale(0.95); }
-      `}</style>
-      <div style={{ fontSize: 64, marginBottom: 16 }}>⚡</div>
-      <h1 style={{ color: "#fff", fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Mis Bolillas</h1>
-      <p style={{ color: "#aaa", fontSize: 14, textAlign: "center", marginBottom: 40 }}>Inicia sesión para guardar tu conocimiento en la nube.</p>
-      <button className="btn-google" onClick={loginGoogle}>
-         <svg width="24" height="24" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.7 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-         Ingresar con Google
-      </button>
-    </div>
-  );
+  if (authLoading) return <div style={{ ...styles.root, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>Cargando sesión...</div>;
+  if (!user) return <LoginScreen loginGoogle={loginGoogle} styles={styles} />;
 
   return (
     <div style={styles.root}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { background: #0f0f0f; } .card-flip { perspective: 900px; }
-        .card-inner { transition: transform 0.5s cubic-bezier(.4,2,.3,1); transform-style: preserve-3d; position: relative; }
-        .card-inner.flipped { transform: rotateY(180deg); }
-        .card-face { backface-visibility: hidden; position: absolute; top:0; left:0; width:100%; height:100%; border-radius: 32px; padding: 24px; overflow-wrap: break-word; word-break: break-word; overflow-y: auto; scrollbar-width: none; }
-        .card-face::-webkit-scrollbar { display: none; }
-        .card-back-face { transform: rotateY(180deg); }
-        .btn-bounce { transition: transform 0.2s, opacity 0.2s; }
-        .btn-bounce:active { transform: scale(0.93); }
-        input, textarea, select { outline: none; font-family: 'DM Sans', sans-serif; }
-        ::-webkit-scrollbar { display: none; }
-        .list-item:active { transform: scale(0.97); }
-        .toast-in { animation: toastIn .3s cubic-bezier(.4,2,.3,1) forwards; }
-        @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(20px);} to {opacity:1; transform:translateX(-50%) translateY(0);} }
-        @keyframes flipInfinite { 0% { transform: perspective(400px) rotateY(0deg); background: #4ECDC4; } 50% { transform: perspective(400px) rotateY(180deg); background: #FF6B6B; } 100% { transform: perspective(400px) rotateY(360deg); background: #4ECDC4; } }
-        .loader-card { width: 50px; height: 65px; border-radius: 10px; animation: flipInfinite 1.5s infinite ease-in-out; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
-        .loading-dots:after { content: '.'; animation: dots 1.5s steps(5, end) infinite; }
-        @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } 80%, 100% { content: ''; } }
-      `}</style>
-      {/* TOUR MODAL */}
-      {isTourOpen && (
-        <div style={styles.modalOverlay} onClick={() => setIsTourOpen(false)}>
-           <div style={{...styles.modal, background: "#fff", color: "#111"}} onClick={e => e.stopPropagation()}>
-              <div style={{...styles.modalTitle, color: "#111"}}>{tourSteps[tourIdx].title}</div>
-              <div style={{...styles.modalSub, color: "#666", marginTop: 12, fontSize: 16, lineHeight: 1.5}}>{tourSteps[tourIdx].msg}</div>
-              <div style={{display: "flex", gap: 12, marginTop: 32}}>
-                <button style={{...styles.modalBtn, background: "#f0f0f0", color: "#666"}} onClick={() => setIsTourOpen(false)}>Cerrar</button>
-                <button style={{...styles.modalBtn, background: "#111", color: "#fff"}} onClick={() => {
-                   if (tourIdx + 1 < tourSteps.length) setTourIdx(i => i + 1);
-                   else setIsTourOpen(false);
-                }}>
-                   {tourIdx + 1 < tourSteps.length ? "Siguiente ›" : "¡Entendido!"}
-                </button>
-              </div>
-           </div>
-        </div>
-      )}
+      {isTourOpen && <TourModal tourSteps={TOUR_STEPS} tourIdx={tourIdx} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen} styles={styles} />}
+      {toast && <div className="toast-in" style={{ ...styles.toast, background: toast.type === "error" ? "#FF6B6B" : "#4ECDC4" }}>{toast.msg}</div>}
+      {deleteConfirm && <DeleteModal confirm={deleteConfirm} onCancel={() => setDeleteConfirm(null)} onDelete={handleDelete} styles={styles} />}
 
-      {toast && <div className="toast-in" style={{...styles.toast, background: toast.type==="error"?"#FF6B6B":"#4ECDC4"}}>{toast.msg}</div>}
-
-      {deleteConfirm && (
-        <div style={styles.modalOverlay} onClick={() => setDeleteConfirm(null)}>
-          <div style={styles.modal} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalTitle}>¿Eliminar?</div>
-            <div style={styles.modalSub}>Esta acción no se puede deshacer.</div>
-            <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-              <button style={{ ...styles.modalBtn, background: "#222" }} onClick={() => setDeleteConfirm(null)}>Cancelar</button>
-              <button style={{ ...styles.modalBtn, background: "#FF6B6B" }}
-                onClick={() => {
-                  if(deleteConfirm.type === "materia") deleteMateria(deleteConfirm.id);
-                  else if(deleteConfirm.type === "bolilla") deleteBolilla(deleteConfirm.id);
-                  else deleteCard(deleteConfirm.id);
-                }}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* HOME: LIST OF MATERIAS */}
       {screen === "home" && (
-        <div style={styles.screen}>
-          <div style={styles.header}>
-            <div style={{ flex: 1 }}>
-              <div style={styles.headerTitle}>Hola {userData?.name?.split(" ")[0] || "..."} <span style={{fontSize: 20}}>🔥 {userData?.streak || 0}</span></div>
-              <div style={styles.headerSub}>{loading ? "Sincronizando..." : `${materias.length} materias`}</div>
-            </div>
-            <button className="btn-bounce" style={{...styles.studyBtn, background: "rgba(255,255,255,0.2)", border: "1px solid rgba(0,0,0,0.1)", color: "#333", marginRight: 8}} onClick={() => { setTourIdx(0); setIsTourOpen(true); }}>💡 Tour</button>
-            {userData?.role === "admin" && (
-               <button className="btn-bounce" style={{...styles.studyBtn, background: "#74B9FF", marginRight: 8, color: "#111"}} onClick={openAdmin}>🛠 Admin</button>
-            )}
-            <button className="btn-bounce" style={{...styles.studyBtn, background: "rgba(0,0,0,0.8)"}} onClick={logout}>Salir</button>
-          </div>
-
-          {renderDashboard()}
-          
-          <div style={{ padding: "0 24px", marginBottom: 16 }}>
-             <button className="btn-bounce" style={{...styles.primaryBtn, background: "#111"}} onClick={() => {setNewName(""); setScreen("addMateria");}}>+ Crear Materia</button>
-          </div>
-
-          {loading ? (
-             <div style={styles.emptyState}>
-              <div className="loader-card"></div>
-              <div style={{...styles.emptyTitle, fontSize: 15, color: "#555"}}>Sincronizando neuronas<span className="loading-dots"></span></div>
-             </div>
-          ) : materias.length === 0 ? (
-            <div style={styles.emptyState}>
-              <div style={{ fontSize: 46 }}>📚</div>
-              <div style={styles.emptyTitle}>Sin materias</div>
-              <div style={styles.emptySub}>Crea una materia académica para agrupar tus temas.</div>
-            </div>
-          ) : (
-             <div style={styles.list}>
-              {materias.map((m) => {
-                const c = COLORS[m.colorIdx] || COLORS[0];
-                const allC = (m.bolillas || []).flatMap(b => b.cards || []);
-                const masteredCount = allC.filter(card => (card.interval || 0) >= 15).length;
-                const progressPct = allC.length > 0 ? Math.round((masteredCount / allC.length) * 100) : 0;
-
-                return (
-                  <div key={m.id} className="list-item" style={{ ...styles.materiaCard, background: c.light, borderLeft: `6px solid ${c.bg}`, flexDirection: "column", alignItems: "flex-start", gap: 12 }}
-                    onClick={() => { setActiveMateriaId(m.id); setScreen("materia"); }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ ...styles.dot, background: c.bg }}><span style={{color:"#fff", fontSize: 18, fontWeight:"bold"}}>{m.name[0]?.toUpperCase()}</span></div>
-                        <div>
-                          <div style={styles.itemName}>{m.name}</div>
-                          <div style={styles.itemSub}>{(m.bolillas||[]).length} bolillas • {allC.length} tarjetas</div>
-                        </div>
-                      </div>
-                      <div style={styles.arrow}>›</div>
-                    </div>
-                    
-                    {/* Progress Bar */}
-                    <div style={{ width: "100%", marginTop: 4 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: c.bg, fontWeight: 700, marginBottom: 4 }}>
-                        <span>DOMINIO DEL TEMA</span>
-                        <span>{progressPct}%</span>
-                      </div>
-                      <div style={{ height: 6, background: "rgba(0,0,0,0.05)", borderRadius: 3, width: "100%" }}>
-                        <div style={{ height: "100%", width: `${progressPct}%`, background: c.bg, borderRadius: 3, transition: "width 0.5s" }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-             </div>
-          )}
-        </div>
+        <MateriasScreen
+          userData={userData} loading={loading} materias={materias} styles={styles}
+          setScreen={setScreen} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen}
+          openAdmin={() => { openAdmin(); setScreen("admin"); }} logout={logout}
+          setNewName={setNewName} setActiveMateriaId={setActiveMateriaId}
+        />
       )}
 
-      {/* ADMIN SCREEN */}
       {screen === "admin" && (
-        <div style={styles.screen}>
-          <div style={{ ...styles.materiaHeader, background: "#111" }}>
-            <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
-            <div style={styles.headerTitleLight}>Panel de Administración</div>
-            <div style={{width: 36}} />
-          </div>
-          <div style={{ padding: "24px 20px" }}>
-             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Gestión de Usuarios</div>
-             {allUsers.length === 0 ? <div style={{textAlign: "center", color: "#888"}}>Cargando usuarios...</div> : (
-               allUsers.map(u => (
-                 <div key={u.uid} style={{ background: "#fff", padding: 16, borderRadius: 16, marginBottom: 12, border: "1px solid #ebebeb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                   <div>
-                     <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{u.name}</div>
-                     <div style={{ fontSize: 12, color: "#888" }}>{u.email}</div>
-                   </div>
-                   <select 
-                     style={{ padding: "8px 12px", borderRadius: 8, background: u.role==="admin"?"#E6F3FF":"#f0f0f0", color: u.role==="admin"?"#0066cc":"#111", border: "none", fontWeight: 600, cursor: "pointer" }}
-                     value={u.role || "user"} 
-                     onChange={(e) => changeUserRole(u.uid, e.target.value)}
-                   >
-                     <option value="user">Usuario</option>
-                     <option value="admin">Administrador</option>
-                   </select>
-                 </div>
-               ))
-             )}
-          </div>
-        </div>
+        <AdminScreen
+          allUsers={allUsers} setScreen={setScreen} changeUserRole={changeUserRole}
+          user={user} styles={styles}
+        />
       )}
 
-      {/* MATERIA DETAIL: LIST OF BOLILLAS */}
       {screen === "materia" && activeMateria && (
-        <div style={styles.screen}>
-          <div style={{ ...styles.materiaHeader, background: color.bg, paddingBottom: 24, flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between" }}>
-               <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
-               <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", flex: 1, textAlign: "center" }}>{activeMateria.name}</div>
-               <button style={styles.deleteBtnHeader} onClick={() => setDeleteConfirm({ type: "materia", id: activeMateriaId })}>🗑</button>
-            </div>
-            
-            <div style={{ background: "rgba(255,255,255,0.15)", width: "100%", padding: 16, borderRadius: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-               <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>BOLILLAS TOTALES</span>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{(activeMateria.bolillas||[]).length} topics</span>
-               </div>
-               <div style={{ textAlign: "right", display: "flex", flexDirection: "column" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>OBJETIVO EXAMEN 📅</span>
-                  <input 
-                    type="date" 
-                    value={activeMateria.examDate || ""} 
-                    style={{ background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: "#fff", textAlign: "right", padding: 0 }}
-                    onChange={(e) => setMateriaDeadline(e.target.value)}
-                  />
-               </div>
-            </div>
-          </div>
-
-          <div style={{ padding: "16px 20px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", padding: "14px 10px", background: color.bg}} onClick={() => {setNewName(""); setScreen("addBolilla");}}>+ Bolilla</button>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", gap: 6, padding: "14px 10px", background: "#f0f0f0", color:"#111", display: "flex", alignItems: "center", justifyContent: "center"}} onClick={() => startAudioRepaso("materia")}>🎧 Audio</button>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", gap: 6, padding: "14px 10px", background: "#4ECDC4", color:"#111", display: "flex", alignItems: "center", justifyContent: "center"}} onClick={() => { setIsExam(false); startQuiz("materia"); }}>🧠 Test</button>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", gap: 6, padding: "14px 10px", background: "#111", color:"#fff", display: "flex", alignItems: "center", justifyContent: "center"}} onClick={() => startExam("materia")}>📝 Exam</button>
-          </div>
-
-          <div style={styles.list}>
-            {(!activeMateria.bolillas || activeMateria.bolillas.length === 0) ? (
-              <div style={styles.emptyState}>
-                <div style={{ fontSize: 48 }}>📖</div><div style={styles.emptyTitle}>Sin bolillas</div><div style={styles.emptySub}>Agrega la primera bolilla de estudio del programa.</div>
-              </div>
-            ) : (
-              activeMateria.bolillas.map((b) => {
-                const masteredCount = (b.cards || []).filter(card => (card.interval || 0) >= 15).length;
-                const totalCards = (b.cards || []).length;
-                const progressPct = totalCards > 0 ? Math.round((masteredCount / totalCards) * 100) : 0;
-
-                return (
-                  <div key={b.id} className="list-item" style={{...styles.bolillaCardBase, flexDirection: "column", alignItems: "flex-start", gap: 12, padding: "16px 20px"}} onClick={() => { setActiveBolillaId(b.id); setScreen("bolilla"); }}>
-                     <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
-                        <div style={styles.itemName}>{b.name}</div>
-                        <div style={{display: "flex", gap: 8, alignItems:"center"}}>
-                          <span style={styles.pill}>{totalCards} cards</span>
-                          <div style={styles.arrow}>›</div>
-                        </div>
-                     </div>
-                     
-                     {/* Mini Progress Bar */}
-                     <div style={{ width: "100%" }}>
-                        <div style={{ height: 4, background: "rgba(0,0,0,0.05)", borderRadius: 2, width: "100%" }}>
-                          <div style={{ height: "100%", width: `${progressPct}%`, background: COLORS[activeMateria.colorIdx].bg, borderRadius: 2, transition: "width 0.5s" }} />
-                        </div>
-                        <div style={{ fontSize: 9, color: "#888", marginTop: 4, fontWeight: 600 }}>{progressPct}% COMPLETADO</div>
-                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <MateriaDetailScreen
+          activeMateria={activeMateria} activeMateriaId={activeMateriaId} color={color}
+          setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
+          setMateriaDeadline={(d) => setMateriaDeadline(activeMateriaId, d)}
+          setNewName={setNewName} startAudioRepaso={() => startAudioRepaso(studyQueue)}
+          setIsExam={setIsExam} startQuiz={() => startQuiz("materia", materias, activeMateriaId)}
+          startExam={() => startExam("materia", materias, activeMateriaId)}
+          setActiveBolillaId={setActiveBolillaId}
+        />
       )}
 
-      {/* BOLILLA DETAIL: LIST OF CARDS */}
       {screen === "bolilla" && activeBolilla && (
-        <div style={styles.screen}>
-          <div style={{ ...styles.materiaHeader, background: "#111" }}>
-             <button style={styles.backBtnLight} onClick={() => setScreen("materia")}>‹</button>
-             <div style={styles.headerTitleLight}>{activeBolilla.name}</div>
-             <button style={styles.deleteBtnHeader} onClick={() => setDeleteConfirm({ type: "bolilla", id: activeBolillaId })}>🗑</button>
-          </div>
-
-          <div style={{ padding: "16px 20px", display: "flex", justifyContent:"space-between", alignItems:"center"}}>
-             <div style={{fontWeight: 700, fontSize: 18, color:"#333"}}>{(activeBolilla.cards||[]).length} tarjetas</div>
-             <div style={{display: "flex", gap: 8}}>
-               {(activeBolilla.cards||[]).length > 0 && 
-                 <button className="btn-bounce" style={{...styles.studyBtn, background: "#4ECDC4", color: "#111", fontSize: 13}} onClick={() => { setIsExam(false); startQuiz("bolilla"); }}>🧠 Test</button>
-               }
-               {(activeBolilla.cards||[]).length > 0 && 
-                 <button className="btn-bounce" style={{...styles.studyBtn, background: "#111", color: "#fff", fontSize: 13}} onClick={() => startExam("bolilla")}>📝 Exam</button>
-               }
-                {(activeBolilla.cards||[]).length > 0 && 
-                  <button className="btn-bounce" style={{...styles.studyBtn, background: "#fff", color: "#111", fontSize: 13}} onClick={startStudy}>▶ Estudiar</button>
-                }
-             </div>
-          </div>
-          <div style={{ padding: "0 20px 16px" }}>
-             <button className="btn-bounce" style={{...styles.primaryBtn, background: "#A29BFE", color: "#fff"}} onClick={() => { setAiSuggestions([]); setScreen("aiGenerator"); }}>✨ Generar con IA (texto)</button>
-          </div>
-
-          <div style={styles.list}>
-            {(!activeBolilla.cards || activeBolilla.cards.length === 0) ? (
-              <div style={styles.emptyState}>
-                <div style={{ fontSize: 48 }}>🃏</div><div style={styles.emptyTitle}>Sin flashcards</div><div style={styles.emptySub}>Crea tus primeras tarjetas para estudiar esta bolilla.</div>
-              </div>
-            ) : (
-              activeBolilla.cards.map((card, idx) => (
-                <div key={card.id} className="list-item" style={styles.cardItemBody}>
-                  <div style={{ flex: 1 }} onClick={() => { setEditingCardId(card.id); setCardFront(card.front); setCardBack(card.back); setScreen("editCard"); }}>
-                    <div style={styles.cardFrontText}>❓ {card.front}</div><div style={styles.cardBackText}>💡 {card.back}</div>
-                  </div>
-                  <button style={styles.deleteCardBtn} onClick={() => setDeleteConfirm({ type: "card", id: card.id })}>×</button>
-                </div>
-              ))
-            )}
-          </div>
-          <button className="btn-bounce" style={{ ...styles.fab, background: color.bg }} onClick={() => { setCardFront(""); setCardBack(""); setScreen("addCard"); }}>+</button>
-        </div>
+        <BolillaDetailScreen
+          activeBolilla={activeBolilla} activeBolillaId={activeBolillaId} color={color}
+          setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
+          setIsExam={setIsExam} startQuiz={() => startQuiz("bolilla", materias, activeMateriaId, activeBolillaId)}
+          startExam={() => startExam("bolilla", materias, activeMateriaId, activeBolillaId)}
+          startStudy={() => startStudy(studyQueue)} setAiSuggestions={setAiSuggestions}
+          setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
+        />
       )}
 
-      {/* ADD FORMS (MATERIA / BOLILLA) */}
-      {(screen === "addMateria" || screen === "addBolilla") && (
-        <div style={styles.screen}>
-          <div style={styles.topBar}>
-            <button style={styles.backBtn} onClick={() => setScreen(screen==="addMateria" ? "home" : "materia")}>‹ Volver</button>
-            <div style={styles.topTitle}>{screen === "addMateria" ? "Nueva Materia" : "Nueva Bolilla"}</div>
-          </div>
-          <div style={styles.formWrap}>
-            <label style={styles.label}>Nombre</label>
-            <input style={styles.input} placeholder={screen === "addMateria" ? "Ej: Anatomía" : "Ej: Sistema Digestivo"} value={newName}
-              onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && (screen==="addMateria"?addMateria():addBolilla())} autoFocus />
-
-            {screen === "addMateria" && (
-              <>
-                <label style={styles.label}>Color de la materia</label>
-                <div style={styles.colorGrid}>
-                  {COLORS.map((c, i) => (
-                    <button key={i} className="btn-bounce" style={{ ...styles.colorDot, background: c.bg, border: newColorIdx === i ? "3px solid #fff" : "3px solid transparent", boxShadow: newColorIdx === i ? `0 0 0 3px ${c.bg}` : "none" }}
-                      onClick={() => setNewColorIdx(i)} />
-                  ))}
-                </div>
-              </>
-            )}
-            <button className="btn-bounce" style={{ ...styles.primaryBtn, background: newName.trim() ? (screen==="addMateria"?COLORS[newColorIdx].bg:color.bg) : "#333", marginTop: 24 }}
-              onClick={screen==="addMateria"?addMateria:addBolilla} disabled={!newName.trim()}>
-              {screen === "addMateria" ? "Crear Materia" : "Crear Bolilla"}
-            </button>
-          </div>
-        </div>
+      {screen === "addMateria" && (
+        <AddMateriaForm
+          newName={newName} setNewName={setNewName} newColorIdx={newColorIdx} setNewColorIdx={setNewColorIdx}
+          onSubmit={() => { addMateria(newName, newColorIdx); setScreen("home"); }}
+          onCancel={() => setScreen("home")} styles={styles}
+        />
       )}
 
-      {/* ADD / EDIT CARD */}
+      {screen === "addBolilla" && (
+        <AddBolillaForm
+          newName={newName} setNewName={setNewName} color={color} styles={styles}
+          onSubmit={() => { addBolilla(activeMateriaId, newName); setScreen("materia"); }}
+          onCancel={() => setScreen("materia")}
+        />
+      )}
+
       {(screen === "addCard" || screen === "editCard") && (
-        <div style={styles.screen}>
-          <div style={{ ...styles.topBar, background: "#fff" }}>
-            <button style={styles.backBtn} onClick={() => { setScreen("bolilla"); setCardFront(""); setCardBack(""); setEditingCardId(null); }}>‹ Volver</button>
-            <div style={styles.topTitle}>{screen === "addCard" ? "Nueva Flashcard" : "Editar Flashcard"}</div>
-          </div>
-          <div style={styles.formWrap}>
-            <label style={styles.label}>Frente (pregunta)</label>
-            <textarea style={styles.textarea} placeholder="¿Cuál es tu pregunta?" value={cardFront} onChange={e => setCardFront(e.target.value)} rows={3} autoFocus />
-            <label style={{ ...styles.label, marginTop: 20 }}>Dorso (respuesta)</label>
-            <textarea style={styles.textarea} placeholder="Escribe la respuesta..." value={cardBack} onChange={e => setCardBack(e.target.value)} rows={4} />
-            <button className="btn-bounce" style={{ ...styles.primaryBtn, background: cardFront.trim() && cardBack.trim() ? color.bg : "#333", marginTop: 24 }}
-              onClick={screen === "addCard" ? addCard : saveEditCard} disabled={!cardFront.trim() || !cardBack.trim()}>
-              {screen === "addCard" ? "Crear Flashcard" : "Guardar Cambios"}
-            </button>
-          </div>
-        </div>
+        <CardForm
+          isEdit={screen === "editCard"} front={cardFront} setFront={setCardFront}
+          back={cardBack} setBack={setCardBack} color={color} styles={styles}
+          onCancel={() => setScreen("bolilla")}
+          onSubmit={() => {
+            if (screen === "addCard") addCard(activeMateriaId, activeBolillaId, cardFront, cardBack);
+            else saveEditCard(activeMateriaId, activeBolillaId, editingCardId, cardFront, cardBack);
+            setScreen("bolilla");
+          }}
+        />
       )}
 
-      {/* QUIZ (MULTIPLE CHOICE) MODE */}
       {screen === "quiz" && (
-        <div style={{ ...styles.screen, background: "#0f0f0f", color: "#fff" }}>
-           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "52px 24px 8px" }}>
-             <button style={styles.studyBackBtn} onClick={() => { setScreen("home"); setSelectedAnswer(null); setIsExam(false); }}>✕</button>
-             <div style={{fontSize: 15, fontWeight:700}}>{!quizFinished ? (isExam ? `Examen: ${quizIdx + 1}/${quizQuestions.length}` : `Test: ${quizIdx + 1}/${quizQuestions.length}`) : 'Resultados'}</div>
-             {isExam && !quizFinished ? <div style={{background: "rgba(255,255,255,0.1)", padding: "4px 10px", borderRadius: 8, fontSize: 14, fontWeight: 700}}>{formatTime(examTimer)}</div> : <div style={{width: 36}}/>}
-           </div>
-           {!quizFinished ? (
-             <div style={{ padding: 24, flex: 1, display: "flex", flexDirection: "column" }}>
-               <div style={{ height: 6, background: "#333", borderRadius: 3, marginBottom: 32, overflow: "hidden" }}><div style={{ height: "100%", background: "#4ECDC4", width: `${(quizIdx / quizQuestions.length) * 100}%`, transition: 'width 0.3s' }} /></div>
-               <div style={{ background: "#1a1a1a", padding: 24, borderRadius: 24, marginBottom: 24, flexShrink: 0 }}>
-                 <div style={{ fontSize: 13, color: "#888", marginBottom: 12, fontWeight: 700, letterSpacing: 1 }}>ELIGE LA OPCIÓN CORRECTA</div>
-                 <h2 style={{ fontSize: 22, fontWeight: 700 }}>{quizQuestions[quizIdx].question}</h2>
-               </div>
-               <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-                 {quizQuestions[quizIdx].options.map((opt, i) => {
-                    const isSelected = selectedAnswer === opt;
-                    const isCorrect = opt === quizQuestions[quizIdx].correctAnswer;
-                    let bg = "#1a1a1a", bd = "#333", col = "#fff";
-                    if (!isExam && selectedAnswer !== null) { if (isCorrect) { bg = "#E0F7F6"; bd = "#4ECDC4"; col = "#111"; } else if (isSelected) { bg = "#FFE0E0"; bd = "#FF6B6B"; col = "#111"; } } else if (isSelected) bd = "#fff";
-                    return (
-                      <button key={i} className="btn-bounce" onClick={() => handleQuizAnswer(opt)} style={{ background: bg, border: `2px solid ${bd}`, borderRadius: 20, padding: "20px 24px", color: col, fontSize: 15, fontWeight: 600, textAlign: "left", cursor: selectedAnswer !== null && !isExam ? "default" : "pointer" }}>{opt}</button>
-                    )
-                 })}
-               </div>
-             </div>
-           ) : (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-                 <div style={{ fontSize: 72, marginBottom: 16 }}>{quizScore > quizQuestions.length / 2 ? '🏆' : '😅'}</div>
-                 <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 8 }}>{isExam ? "Examen Finalizado" : "Test Completado"}</h1>
-                 
-                 <div style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 24, padding: 24, width: "100%", marginBottom: 32 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                       <span style={{ color: "#888" }}>Puntaje:</span>
-                       <span style={{ fontWeight: 700, color: "#4ECDC4" }}>{Math.round((quizScore/quizQuestions.length)*100)}% ({quizScore}/{quizQuestions.length})</span>
-                    </div>
-                    {isExam && (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                           <span style={{ color: "#888" }}>Tiempo total:</span>
-                           <span style={{ fontWeight: 700 }}>{formatTime(examTimer)}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                           <span style={{ color: "#888" }}>Tiempo promedio:</span>
-                           <span style={{ fontWeight: 700 }}>{Math.round(examTimer/quizQuestions.length)}s / preg</span>
-                        </div>
-                      </>
-                    )}
-                 </div>
-
-                 <button className="btn-bounce" style={{...styles.primaryBtn, background: "#4ECDC4", color: "#111"}} onClick={() => isExam ? startExam() : startQuiz()}>Reiniciar</button>
-                 <button className="btn-bounce" style={{...styles.primaryBtn, background: "transparent", color: "#fff", border: "2px solid #333", marginTop: 12}} onClick={() => { setScreen("home"); setIsExam(false); }}>Ir al inicio</button>
-              </div>
-            )}
-        </div>
+        <QuizMode
+          screen={screen} isExam={isExam} quizFinished={quizFinished} quizIdx={quizIdx}
+          quizQuestions={quizQuestions} examTimer={examTimer} selectedAnswer={selectedAnswer}
+          quizScore={quizScore} handleQuizAnswer={handleQuizAnswer} styles={styles}
+          startExam={() => startExam("bolilla", materias, activeMateriaId, activeBolillaId)}
+          startQuiz={() => startQuiz("bolilla", materias, activeMateriaId, activeBolillaId)}
+          setScreen={setScreen} setIsExam={setIsExam} setSelectedAnswer={setSelectedAnswer}
+          formatTime={formatTime}
+        />
       )}
 
-      {/* AI GENERATOR SCREEN */}
       {screen === "aiGenerator" && (
-        <div style={styles.screen}>
-          <div style={styles.materiaHeader}>
-            <button style={styles.backBtn} onClick={() => setScreen("bolilla")}>‹</button>
-            <div style={styles.headerTitle}>Generador IA</div>
-            <div style={{width: 36}}/>
-          </div>
-          <div style={styles.formWrap}>
-            <label style={styles.label}>1. Configura tu API Key (Gemini)</label>
-            <input type="password" style={styles.input} placeholder="Pega tu API Key de Google acá..." value={aiApiKey} onChange={e => setAiApiKey(e.target.value)} />
-            <div style={{fontSize: 10, color: "#888", marginBottom: 16}}>Consíguela gratis en makersuite.google.com</div>
-            
-            <label style={styles.label}>2. Sube un PDF o pega tu texto</label>
-            <div style={{ marginBottom: 16 }}>
-               <input 
-                 type="file" 
-                 accept=".pdf" 
-                 id="pdf-upload" 
-                 style={{ display: "none" }} 
-                 onChange={handlePdfUpload} 
-               />
-               <label htmlFor="pdf-upload" style={{ display: "block", background: "#f0f0f0", border: "2px dashed #ccc", padding: "20px", borderRadius: 16, textAlign: "center", cursor: "pointer", color: "#666" }}>
-                 {aiLoading ? "⏳ Procesando documento..." : "📂 Subir PDF para analizar"}
-               </label>
-            </div>
-            
-            <textarea style={{...styles.textarea, height: 180}} placeholder="O pega aquí tus apuntes directamente..." value={aiInputText} onChange={e => setAiInputText(e.target.value)} />
-            
-            <button className="btn-bounce" style={{...styles.primaryBtn, background: aiInputText.trim() && aiApiKey ? "#A29BFE" : "#333", marginTop: 20}} onClick={generateWithAI} disabled={aiLoading || !aiInputText.trim() || !aiApiKey}>
-              {aiLoading ? "Generando..." : "🚀 Generar Flashcards"}
-            </button>
-            
-            {aiSuggestions.length > 0 && (
-              <div style={{ marginTop: 32 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 800 }}>Previsualización ({aiSuggestions.filter(s=>s.selected).length} seleccionadas)</h3>
-                  <button className="btn-bounce" style={{ background: "#A29BFE", color: "#fff", border:"none", padding: "6px 12px", borderRadius: 12, fontSize: 11, fontWeight: 700 }} onClick={addManualSuggestion}>+ Añadir Manual</button>
-                </div>
-                
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 30 }}>
-                  {aiSuggestions.map((s, i) => (
-                    <div key={s.id} style={{ 
-                      background: s.selected ? "#fff" : "rgba(255,255,255,0.05)", 
-                      padding: 16, borderRadius: 16, 
-                      border: s.selected ? "1px solid #A29BFE" : "1px solid transparent",
-                      opacity: s.selected ? 1 : 0.6,
-                      transition: "all 0.2s"
-                    }}>
-                      <div style={{ display: "flex", gap: 12 }}>
-                        <input 
-                           type="checkbox" 
-                           checked={s.selected} 
-                           style={{ width: 18, height: 18, accentColor: "#A29BFE" }}
-                           onChange={() => toggleSelectSuggestion(s.id)} 
-                        />
-                        <div style={{ flex: 1 }}>
-                          <textarea 
-                            style={{ width: "100%", background: "transparent", border: "none", color: s.selected ? "#111" : "#888", fontWeight: 800, fontSize: 14, resize: "none", overflow: "hidden" }} 
-                            value={s.front}
-                            onChange={(e) => updateSuggestion(s.id, "front", e.target.value)}
-                          />
-                          <textarea 
-                            style={{ width: "100%", background: "transparent", border: "none", color: s.selected ? "#666" : "#444", fontSize: 13, marginTop: 4, resize: "none", overflow: "hidden" }} 
-                            value={s.back}
-                            onChange={(e) => updateSuggestion(s.id, "back", e.target.value)}
-                          />
-                        </div>
-                        <button style={{ background: "transparent", border: "none", color: "#FF7675", fontSize: 16 }} onClick={() => removeSuggestion(s.id)}>×</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button className="btn-bounce" style={{...styles.primaryBtn, background: "#00B894", flex: 2}} onClick={saveAiFlashcards}>💾 Guardar {aiSuggestions.filter(s=>s.selected).length} seleccionadas</button>
-                  <button className="btn-bounce" style={{...styles.primaryBtn, background: "#333", flex: 1}} onClick={() => setAiSuggestions([])}>Limpiar</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <AIGenerator
+          aiApiKey={aiApiKey} setAiApiKey={setAiApiKey} aiInputText={aiInputText} setAiInputText={setAiInputText}
+          aiLoading={aiLoading} aiSuggestions={aiSuggestions} setAiSuggestions={setAiSuggestions}
+          handlePdfUpload={handlePdfUpload} generateWithAI={generateWithAI} styles={styles}
+          toggleSelectSuggestion={toggleSelectSuggestion} updateSuggestion={updateSuggestion}
+          removeSuggestion={removeSuggestion} addManualSuggestion={addManualSuggestion}
+          saveAiFlashcards={async () => {
+            const selected = aiSuggestions.filter(s => s.selected);
+            setAiLoading(true);
+            try {
+              await addCards(activeMateriaId, activeBolillaId, selected);
+              setAiSuggestions([]); setScreen("bolilla");
+            } finally {
+              setAiLoading(false);
+            }
+          }}
+          setScreen={setScreen}
+        />
       )}
-      {screen === "study" && (
-        <div style={{ ...styles.screen, background: "#111", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "52px 24px 8px" }}>
-            <button style={styles.studyBackBtn} onClick={() => { setScreen("bolilla"); window.speechSynthesis?.cancel(); }}>✕</button>
-            <div style={{fontSize:15, color:"#fff", fontWeight:700}}>{!isStudyFinished ? `${activeCardIdx + 1} / ${studyQueue.length}` : 'Progreso'}</div>
-            {!isStudyFinished && (
-              <button style={{ ...styles.studyBackBtn, fontSize: 22 }} onClick={(e) => { e.stopPropagation(); speakText(flipped ? studyQueue[activeCardIdx].back : studyQueue[activeCardIdx].front); }}>🔊</button>
-            )}
-          </div>
 
-          {!isStudyFinished ? (
-            <>
-              <div style={{ padding: "0 24px" }}><div style={{ height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2 }}><div style={{ background: "#fff", height: "100%", width: `${((activeCardIdx + 1) / studyQueue.length) * 100}%` }} /></div></div>
-              <div style={{ textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 16 }}>{flipped ? "Califica tu recuerdo:" : "Tocá para ver la respuesta"}</div>
-              
-              <div className="card-flip" style={{ flex:1, padding: "20px 32px", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={() => !flipped && setFlipped(true)}>
-                <div style={{ width: "100%", height: "420px", position: "relative" }}>
-                  <div className={`card-inner${flipped ? " flipped" : ""}`} style={{ width: "100%", height: "100%" }}>
-                    
-                    {/* FRONT FACE */}
-                    <div className="card-face" style={{ 
-                      background: "#fff", color:"#111", 
-                      display: "flex", flexDirection: "column", 
-                      justifyContent: "center", alignItems: "center", 
-                      boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
-                      overflowY: "auto" 
-                    }}>
-                      <div style={{fontSize:24, fontWeight:800, textAlign:"center", padding:24, width:"100%", lineHeight: 1.4}}>{studyQueue[activeCardIdx].front}</div>
-                    </div>
-                    
-                    {/* BACK FACE */}
-                    <div className="card-face card-back-face" style={{ 
-                      background: color.bg, color: "#fff", 
-                      display: "flex", flexDirection: "column", 
-                      justifyContent: "center", alignItems: "center", 
-                      boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
-                      overflowY: "auto" 
-                    }}>
-                      <div style={{fontSize:22, fontWeight:600, textAlign:"center", padding:24, width:"100%", lineHeight: 1.5}}>{studyQueue[activeCardIdx].back}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div style={{ padding: "24px 24px 40px" }}>
-                {!flipped ? (
-                  <button className="btn-bounce" style={{width:"100%", background:"#fff", color:"#111", border:"none", borderRadius:20, padding:"20px", fontWeight:800, fontSize: 18}} onClick={() => setFlipped(true)}>👁 VER RESPUESTA</button>
-                ) : (
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <button className="btn-bounce" style={{flex:1, background:"#FF6B6B", color:"#fff", border:"none", borderRadius:16, padding:"16px 8px", fontWeight:700, fontSize:13}} onClick={() => rateCard(0)}>❌ No lo sabía</button>
-                    <button className="btn-bounce" style={{flex:1, background:"#F0A500", color:"#fff", border:"none", borderRadius:16, padding:"16px 8px", fontWeight:700, fontSize:13}} onClick={() => rateCard(1)}>😐 Dudé</button>
-                    <button className="btn-bounce" style={{flex:1, background:"#4ECDC4", color:"#fff", border:"none", borderRadius:16, padding:"16px 8px", fontWeight:700, fontSize:13}} onClick={() => rateCard(2)}>✅ Fácil</button>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-                <div style={{ fontSize: 72, marginBottom: 16 }}>🚀</div>
-                <h1 style={{ color: "#fff", fontSize: 28, fontWeight: 800, marginBottom: 8, textAlign: "center" }}>¡Sesión Finalizada!</h1>
-                <p style={{ color: "#aaa", fontSize: 15, marginBottom: 32, textAlign: "center" }}>Has revisado todas las tarjetas pendientes. Vuelve más tarde para que el algoritmo te las asigne nuevamente.</p>
-                <button className="btn-bounce" style={{...styles.primaryBtn, background: color.bg}} onClick={() => setScreen("bolilla")}>Volver a la bolilla</button>
-            </div>
-          )}
-        </div>
+      {screen === "study" && (
+        <StudyMode
+          isStudyFinished={isStudyFinished} activeCardIdx={activeCardIdx} studyQueue={studyQueue}
+          flipped={flipped} setFlipped={setFlipped} styles={styles}
+          rateCard={(q) => {
+            rateCard(activeMateriaId, activeBolillaId, studyQueue[activeCardIdx].id, q, updateStudyStats);
+            if (activeCardIdx + 1 < studyQueue.length) { setActiveCardIdx(activeCardIdx + 1); setFlipped(false); }
+            else setIsStudyFinished(true);
+          }}
+          speakText={speakText} setScreen={setScreen} color={color}
+        />
       )}
-      {/* AUDIO REPASO SCREEN */}
+
       {screen === "audioRepaso" && (
-        <div style={{ ...styles.screen, background: "#111", color: "#fff", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-          <div style={{ position: "absolute", top: 40, width: "100%", padding: "0 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-             <button style={{ background: "transparent", border: "none", color: "#fff", fontSize: 24, cursor: "pointer" }} onClick={() => { setAudioPlaying(false); window.speechSynthesis.cancel(); setScreen("home"); }}>✕</button>
-             <div style={{ fontSize: 14, fontWeight: 700, color: "#888" }}>🎧 MODO AUDIO-REPASO</div>
-             <div style={{ width: 24 }} />
-          </div>
-          
-          <div style={{ fontSize: 80, marginBottom: 40, opacity: 0.1 }}>{audioIdx + 1}/{studyQueue.length}</div>
-          
-          <div style={{ textAlign: "center", padding: "0 40px", minHeight: 180, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-             <div style={{ fontSize: 18, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>{audioStep === "front" ? "PREGUNTA:" : audioStep === "back" ? "RESPUESTA:" : "PIENSA..."}</div>
-             <div style={{ fontSize: 28, fontWeight: 800, color: audioStep === "back" ? "#4ECDC4" : "#fff", lineHeight: 1.3 }}>{audioStep === "back" ? studyQueue[audioIdx]?.back : studyQueue[audioIdx]?.front}</div>
-          </div>
-          
-          <div style={{ display: "flex", alignItems: "center", gap: 32, marginTop: 60 }}>
-             <button style={{ background: "transparent", border: "none", color: "#fff", fontSize: 32, cursor: "pointer" }} onClick={() => { setAudioIdx(prev => Math.max(0, prev - 1)); setAudioStep("front"); }}>⏮</button>
-             <button style={{ width: 100, height: 100, borderRadius: 50, background: "#fff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, cursor: "pointer" }} onClick={toggleAudio}>
-                {audioPlaying ? "⏸" : "▶️"}
-             </button>
-             <button style={{ background: "transparent", border: "none", color: "#fff", fontSize: 32, cursor: "pointer" }} onClick={() => { setAudioIdx(prev => (prev + 1) % studyQueue.length); setAudioStep("front"); }}>⏭</button>
-          </div>
-          
-          <div style={{ marginTop: 40, width: "100%", padding: 24 }}>
-             <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
-                <div style={{ height: "100%", width: `${((audioIdx + 1) / studyQueue.length) * 100}%`, background: "#fff", borderRadius: 2, transition: "width 0.3s" }} />
-             </div>
-          </div>
-        </div>
+        <AudioRepaso
+          studyQueue={studyQueue} audioIdx={audioIdx} audioPlaying={audioPlaying} audioStep={audioStep}
+          setAudioIdx={setAudioIdx} setAudioStep={setAudioStep} toggleAudio={toggleAudio}
+          setScreen={setScreen} styles={styles}
+        />
       )}
     </div>
   );
 }
-
-const styles = {
-  root: { fontFamily: "'Sora', sans-serif", maxWidth: 430, margin: "0 auto", minHeight: "100dvh", background: "#0f0f0f", color: "#111", position: "relative", overflow: "hidden" },
-  screen: { display: "flex", flexDirection: "column", minHeight: "100dvh", background: "#f7f7f5" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "52px 24px 20px" },
-  headerTitle: { fontSize: 24, fontWeight: 800, color: "#111", letterSpacing: "-0.5px" },
-  headerSub: { fontSize: 13, color: "#888", marginTop: 2 },
-  list: { display: "flex", flexDirection: "column", gap: 12, padding: "8px 20px 120px", overflowY: "auto" },
-  emptyState: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 40, textAlign: "center" },
-  emptyTitle: { fontSize: 18, fontWeight: 700, color: "#333" },
-  emptySub: { fontSize: 13, color: "#999" },
-  topBar: { display: "flex", alignItems: "center", padding: "52px 20px 16px", gap: 12 },
-  backBtn: { background: "none", border: "none", fontSize: 17, color: "#555", cursor: "pointer", fontWeight: 600, padding: "6px 0" },
-  topTitle: { fontSize: 18, fontWeight: 700, color: "#111" },
-  formWrap: { display: "flex", flexDirection: "column", padding: "8px 24px 40px", gap: 8 },
-  label: { fontSize: 12, fontWeight: 600, color: "#888", letterSpacing: 1, textTransform: "uppercase" },
-  input: { borderRadius: 14, border: "2px solid #e0e0e0", padding: "14px 16px", fontSize: 16, width: "100%" },
-  textarea: { borderRadius: 14, border: "2px solid #e0e0e0", padding: "14px 16px", fontSize: 15, width: "100%", resize: "none" },
-  colorGrid: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 },
-  colorDot: { width: 38, height: 38, borderRadius: 12 },
-  primaryBtn: { borderRadius: 16, border: "none", padding: "16px 24px", fontSize: 16, fontWeight: 700, color: "#fff", width: "100%" },
-  materiaHeader: { display: "flex", alignItems: "center", padding: "52px 20px 20px", justifyContent: "space-between" },
-  backBtnLight: { background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 10, width: 36, height: 36, fontSize: 20, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" },
-  headerTitleLight: { fontSize: 20, fontWeight: 800, color: "#fff", flex: 1, textAlign: "center" },
-  deleteBtnHeader: { background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", borderRadius: 10, width: 36, height: 36, fontSize: 16 },
-  statsBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px" },
-  stat: { display: "flex", flexDirection: "column" }, statNum: { fontSize: 28, fontWeight: 800, lineHeight: 1 }, statLabel: { fontSize: 12, color: "#888" },
-  materiaCard: { display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 16, padding: "16px", cursor: "pointer" },
-  bolillaCardBase: { display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 16, background: "#fff", padding: "20px 16px", cursor: "pointer", border: "1px solid #ebebeb", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" },
-  dot: { width: 38, height: 38, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  itemName: { fontSize: 16, fontWeight: 700, color: "#111" }, itemSub: { fontSize: 12, color: "#666", marginTop: 2 },
-  arrow: { fontSize: 22, color: "#bbb", fontWeight: 300 },
-  pill: { background: "#f0f0f0", color:"#555", fontSize: 12, fontWeight: 600, padding: "4px 8px", borderRadius: 8 },
-  studyBtn: { borderRadius: 12, border: "none", padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "#fff" },
-  cardItemBody: { display: "flex", alignItems: "center", background: "#fff", borderRadius: 16, padding: "16px", gap: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.06)", overflow: "hidden" },
-  cardFrontText: { fontSize: 14, fontWeight: 600, color: "#222", marginBottom: 6, wordBreak: "break-word" }, cardBackText: { fontSize: 13, color: "#666", wordBreak: "break-word" },
-  deleteCardBtn: { background: "#FFE5E5", border: "none", borderRadius: 10, width: 30, height: 30, fontSize: 18, color: "#FF6B6B", cursor: "pointer" },
-  fab: { position: "fixed", bottom: 32, right: 24, width: 60, height: 60, borderRadius: 20, border: "none", fontSize: 30, color: "#fff", cursor: "pointer", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center" },
-  toast: { position: "fixed", bottom: 100, left: "50%", transform: "translateX(-50%)", padding: "12px 24px", borderRadius: 14, color: "#fff", fontSize: 14, fontWeight: 700, zIndex: 999, whiteSpace: "nowrap", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" },
-  modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 998, display: "flex", alignItems: "flex-end", padding: 20 },
-  modal: { background: "#1a1a1a", borderRadius: 24, padding: "32px 24px", width: "100%", maxWidth: 390, margin: "0 auto" },
-  modalTitle: { fontSize: 20, fontWeight: 800, color: "#fff" }, modalSub: { fontSize: 14, color: "#888", marginTop: 8 },
-  modalBtn: { flex: 1, borderRadius: 14, border: "none", padding: "14px", fontSize: 15, fontWeight: 700, color: "#fff" },
-  studyBackBtn: { background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 12, width: 36, height: 36, fontSize: 18, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" },
-  dashboardCard: { background: "#fff", margin: "0 20px 24px", padding: 24, borderRadius: 24, boxShadow: "0 8px 24px rgba(0,0,0,0.05)" },
-  dashboardStat: { display: "flex", flexDirection: "column", alignItems: "center", flex: 1 },
-};
