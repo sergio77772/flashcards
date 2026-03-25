@@ -656,6 +656,82 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  // --- RENDER DASHBOARD ---
+  const renderDashboard = () => {
+    const allCards = materias.flatMap(m => m.bolillas || []).flatMap(b => b.cards || []);
+    const totalCards = allCards.length;
+    const mastered = allCards.filter(c => (c.interval || 0) >= 15).length;
+    
+    // Calcular próximos repasos
+    const upcoming = Array(7).fill(0);
+    allCards.forEach(c => {
+      const diff = Math.floor((c.nextReview - Date.now()) / (1000 * 60 * 60 * 24));
+      if (diff >= 0 && diff < 7) upcoming[diff]++;
+    });
+    const maxUpcoming = Math.max(...upcoming, 5);
+
+    // Recomendación
+    const nextExam = materias.filter(m => m.examDate).sort((a,b) => new Date(a.examDate) - new Date(b.examDate))[0];
+    let studyTip = "💡 Tip: Repasar 15 min al día mantiene tu racha viva.";
+    if (nextExam) {
+      const daysLeft = Math.ceil((new Date(nextExam.examDate) - Date.now()) / (1000 * 60 * 60 * 24));
+      const leftToMaster = totalCards - mastered;
+      if (daysLeft > 0 && leftToMaster > 0) {
+        studyTip = `🎯 Meta: Domina ${Math.ceil(leftToMaster/daysLeft)} tarjetas diarias para tu examen en ${daysLeft} días.`;
+      }
+    }
+
+    return (
+      <div style={styles.dashboardCard}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
+          <div style={styles.dashboardStat}>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{(userData?.streak || 0)}🔥</div>
+            <div style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>RACHA</div>
+          </div>
+          <div style={styles.dashboardStat}>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{mastered}✅</div>
+            <div style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>DOMINADAS</div>
+          </div>
+          <div style={styles.dashboardStat}>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{totalCards}📚</div>
+            <div style={{ fontSize: 10, color: "#888", fontWeight: 700 }}>TOTAL</div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12, fontSize: 11, fontWeight: 800, color: "#333", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+           <span>PROGRESO DE APRENDIZAJE ✨</span>
+           <span style={{ color: "#A29BFE" }}>{Math.round((mastered/totalCards||0)*100)}%</span>
+        </div>
+        
+        <div style={{ position: "relative", height: 160, background: "rgba(162, 155, 254, 0.05)", borderRadius: 20, padding: 20, overflow: "hidden" }}>
+           {/* SVG Progress Curve */}
+           <svg style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: "100%", opacity: 0.3 }} viewBox="0 0 100 100" preserveAspectRatio="none">
+              <path d="M0,80 C20,70 40,90 60,60 C80,30 100,50 100,20 L100,100 L0,100 Z" fill="url(#grad)" />
+              <defs><linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#A29BFE" /><stop offset="100%" stopColor="transparent" /></linearGradient></defs>
+           </svg>
+           
+           <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "flex-end", gap: 10 }}>
+              {upcoming.map((count, i) => {
+                const h = (count / maxUpcoming) * 100;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: "100%", height: `${h}%`, background: i === 0 ? "#A29BFE" : "#fff", borderRadius: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", position: "relative" }}>
+                        {count > 0 && <div style={{ position: "absolute", top: -20, left: 0, right: 0, textAlign: "center", fontSize: 10, fontWeight: 800, color: "#111" }}>{count}</div>}
+                    </div>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: i === 0 ? "#A29BFE" : "#888" }}>{["HOY","MAÑ","MAR","MIE","JUE","VIE","SAB"][i]}</div>
+                  </div>
+                )
+              })}
+           </div>
+        </div>
+
+        <div style={{ marginTop: 24, background: "#111", padding: 16, borderRadius: 16, borderLeft: "4px solid #A29BFE" }}>
+           <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", lineHeight: 1.4 }}>{studyTip}</div>
+        </div>
+      </div>
+    );
+  };
+
   if (authLoading) return <div style={{...styles.root, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff"}}>Cargando sesión...</div>;
   if (!user) return (
     <div style={{ ...styles.root, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -752,21 +828,7 @@ export default function App() {
             <button className="btn-bounce" style={{...styles.studyBtn, background: "rgba(0,0,0,0.8)"}} onClick={logout}>Salir</button>
           </div>
 
-          {/* QUICK STATS BAR */}
-          <div style={{ display: "flex", gap: 12, padding: "0 24px", marginBottom: 20 }}>
-            <div style={{...styles.bolillaCardBase, flex: 1, padding: 12, textAlign: "center", background: "#fff"}}>
-               <div style={{fontSize: 20, fontWeight: 800}}>{masteredCardsCount}</div>
-               <div style={{fontSize: 10, color: "#888", textTransform: "uppercase"}}>Dominadas</div>
-            </div>
-            <div style={{...styles.bolillaCardBase, flex: 1, padding: 12, textAlign: "center", background: "#fff"}}>
-               <div style={{fontSize: 20, fontWeight: 800}}>{Math.round((userData?.totalStudyTime||0)/60)}</div>
-               <div style={{fontSize: 10, color: "#888", textTransform: "uppercase"}}>Minutos</div>
-            </div>
-            <div style={{...styles.bolillaCardBase, flex: 1, padding: 12, textAlign: "center", background: "#fff"}}>
-               <div style={{fontSize: 20, fontWeight: 800}}>{totalCards}</div>
-               <div style={{fontSize: 10, color: "#888", textTransform: "uppercase"}}>Total Cards</div>
-            </div>
-          </div>
+          {renderDashboard()}
           
           <div style={{ padding: "0 24px", marginBottom: 16 }}>
              <button className="btn-bounce" style={{...styles.primaryBtn, background: "#111"}} onClick={() => {setNewName(""); setScreen("addMateria");}}>+ Crear Materia</button>
@@ -858,30 +920,35 @@ export default function App() {
       {/* MATERIA DETAIL: LIST OF BOLILLAS */}
       {screen === "materia" && activeMateria && (
         <div style={styles.screen}>
-          <div style={{ ...styles.materiaHeader, background: color.bg }}>
-            <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
-            <div style={styles.headerTitleLight}>{activeMateria.name}</div>
-            <button style={styles.deleteBtnHeader} onClick={() => setDeleteConfirm({ type: "materia", id: activeMateriaId })}>🗑</button>
-          </div>
-          
-          <div style={{ ...styles.statsBar, background: color.light }}>
-            <div style={styles.stat}><span style={{ ...styles.statNum, color: color.bg }}>{(activeMateria.bolillas||[]).length}</span><span style={styles.statLabel}>bolillas</span></div>
-            <div style={{ textAlign: "right" }}>
-               <div style={{ fontSize: 11, fontWeight: 700, color: color.bg }}>DÍA DE EXAMEN:</div>
-               <input 
-                 type="date" 
-                 value={activeMateria.examDate || ""} 
-                 style={{ background: "transparent", border: "none", fontSize: 13, fontWeight: 600, color: "#333", textAlign: "right" }}
-                 onChange={(e) => setMateriaDeadline(e.target.value)}
-               />
+          <div style={{ ...styles.materiaHeader, background: color.bg, paddingBottom: 24, flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between" }}>
+               <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
+               <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", flex: 1, textAlign: "center" }}>{activeMateria.name}</div>
+               <button style={styles.deleteBtnHeader} onClick={() => setDeleteConfirm({ type: "materia", id: activeMateriaId })}>🗑</button>
+            </div>
+            
+            <div style={{ background: "rgba(255,255,255,0.15)", width: "100%", padding: 16, borderRadius: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+               <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>BOLILLAS TOTALES</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{(activeMateria.bolillas||[]).length} topics</span>
+               </div>
+               <div style={{ textAlign: "right", display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>OBJETIVO EXAMEN 📅</span>
+                  <input 
+                    type="date" 
+                    value={activeMateria.examDate || ""} 
+                    style={{ background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: "#fff", textAlign: "right", padding: 0 }}
+                    onChange={(e) => setMateriaDeadline(e.target.value)}
+                  />
+               </div>
             </div>
           </div>
 
-          <div style={{ padding: "16px 20px", display: "flex", gap: 12 }}>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: 2, padding: "14px 8px", background: color.bg}} onClick={() => {setNewName(""); setScreen("addBolilla");}}>+ Añadir Bolilla</button>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: 1, padding: "14px 8px", background: "#f0f0f0", color:"#111"}} onClick={() => { startAudioRepaso("materia"); }}>🎧 Audio</button>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: 1, padding: "14px 8px", background: "#4ECDC4", color:"#111"}} onClick={() => { setIsExam(false); startQuiz("materia"); }}>🧠 Test</button>
-            <button className="btn-bounce" style={{...styles.primaryBtn, flex: 1, padding: "14px 8px", background: "#111", color:"#fff"}} onClick={() => startExam("materia")}>📝 Exam</button>
+          <div style={{ padding: "16px 20px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", padding: "14px 10px", background: color.bg}} onClick={() => {setNewName(""); setScreen("addBolilla");}}>+ Bolilla</button>
+            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", gap: 6, padding: "14px 10px", background: "#f0f0f0", color:"#111", display: "flex", alignItems: "center", justifyContent: "center"}} onClick={() => startAudioRepaso("materia")}>🎧 Audio</button>
+            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", gap: 6, padding: "14px 10px", background: "#4ECDC4", color:"#111", display: "flex", alignItems: "center", justifyContent: "center"}} onClick={() => { setIsExam(false); startQuiz("materia"); }}>🧠 Test</button>
+            <button className="btn-bounce" style={{...styles.primaryBtn, flex: "1 0 auto", gap: 6, padding: "14px 10px", background: "#111", color:"#fff", display: "flex", alignItems: "center", justifyContent: "center"}} onClick={() => startExam("materia")}>📝 Exam</button>
           </div>
 
           <div style={styles.list}>
@@ -1302,4 +1369,6 @@ const styles = {
   modalTitle: { fontSize: 20, fontWeight: 800, color: "#fff" }, modalSub: { fontSize: 14, color: "#888", marginTop: 8 },
   modalBtn: { flex: 1, borderRadius: 14, border: "none", padding: "14px", fontSize: 15, fontWeight: 700, color: "#fff" },
   studyBackBtn: { background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 12, width: 36, height: 36, fontSize: 18, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" },
+  dashboardCard: { background: "#fff", margin: "0 20px 24px", padding: 24, borderRadius: 24, boxShadow: "0 8px 24px rgba(0,0,0,0.05)" },
+  dashboardStat: { display: "flex", flexDirection: "column", alignItems: "center", flex: 1 },
 };
