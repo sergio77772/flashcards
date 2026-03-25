@@ -21,6 +21,8 @@ export default function AIGenerator({
   setScreen,
   styles,
 }) {
+  const [showApiKey, setShowApiKey] = React.useState(!aiApiKey);
+
   return (
     <div style={styles.screen}>
       {aiLoading && (
@@ -45,30 +47,45 @@ export default function AIGenerator({
           </div>
         </div>
       )}
-      <div style={styles.materiaHeader}>
+      <div style={{ ...styles.materiaHeader, background: "#111", borderRadius: "0 0 32px 32px", marginBottom: 12 }}>
         <button
           style={styles.backBtnLight}
           onClick={() => setScreen("bolilla")}
         >
           ‹
         </button>
-        <div style={styles.headerTitleLight}>Generador IA</div>
+        <div style={styles.headerTitleLight}>Generación IA ✨</div>
         <div style={{ width: 36 }} />
       </div>
       <div style={styles.formWrap}>
-        <label style={styles.label}>1. Configura tu API Key (Gemini)</label>
-        <input
-          type="password"
-          style={styles.input}
-          placeholder="Pega tu API Key de Google acá..."
-          value={aiApiKey}
-          onChange={(e) => setAiApiKey(e.target.value)}
-        />
-        <div style={{ fontSize: 10, color: "#888", marginBottom: 16 }}>
-          Consíguela gratis en makersuite.google.com
+        <div 
+          style={{ 
+            display: "flex", justifyContent: "space-between", alignItems: "center", 
+            marginBottom: 12, cursor: "pointer", background: "#eee", padding: "10px 16px", borderRadius: 12 
+          }}
+          onClick={() => setShowApiKey(!showApiKey)}
+        >
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>⚙️ {showApiKey ? "Ocultar" : "Configurar"} API Key</span>
+          <span style={{ fontSize: 10, color: "#888" }}>{showApiKey ? "▴" : "▾"}</span>
         </div>
 
-        <label style={styles.label}>2. Sube un PDF, foto o pega tu texto</label>
+        {showApiKey && (
+          <div style={{ marginBottom: 20, animation: "fadeIn 0.3s ease" }}>
+            <label style={styles.label}>Configura tu API Key (Gemini)</label>
+            <input
+              type="password"
+              style={styles.input}
+              placeholder="Pega tu API Key de Google acá..."
+              value={aiApiKey}
+              onChange={(e) => setAiApiKey(e.target.value)}
+            />
+            <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>
+              Consíguela gratis en makersuite.google.com
+            </div>
+          </div>
+        )}
+
+        <label style={styles.label}>1. Sube un PDF, foto o pega tu texto</label>
         <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
           <div style={{ flex: 1 }}>
             <input

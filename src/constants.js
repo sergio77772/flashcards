@@ -43,3 +43,25 @@ export const TOUR_STEPS = [
     msg: "Visualiza tu carga de estudio semanal y mantén tu racha de aprendizaje viva cada día.",
   },
 ];
+export const STUDY_TIPS = [
+  {
+    title: "🧠 Repetición Espaciada",
+    msg: "Estudia en intervalos crecientes (1 día, 6 días, 15 días). Esto mueve la información de la memoria de corto plazo a la de largo plazo.",
+  },
+  {
+    title: "✍️ Recuerdo Activo",
+    msg: "No leas tus notas. Intenta responder la pregunta antes de ver el dorso. El esfuerzo mental de recordar es lo que fortalece la neurona.",
+  },
+  {
+    title: "⚡ Sesiones Cortas",
+    msg: "Es mejor estudiar 15 minutos todos los días que 4 horas una vez por semana. La constancia es el secreto del algoritmo.",
+  },
+  {
+    title: "🖼️ Usa Imágenes",
+    msg: "Nuestro cerebro procesa imágenes 60,000 veces más rápido que el texto. Sube fotos de tus esquemas para memorizar mejor.",
+  },
+  {
+    title: "🍎 Descanso y Sueño",
+    msg: "Tu cerebro consolida lo aprendido mientras duermes. Nunca sacrifiques horas de sueño por una noche de estudio intenso.",
+  },
+];

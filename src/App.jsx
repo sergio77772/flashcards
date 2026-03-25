@@ -20,9 +20,11 @@ import StudyMode from "./components/StudyMode";
 import AudioRepaso from "./components/AudioRepaso";
 import { TourModal, DeleteModal } from "./components/Modals";
 import { AddMateriaForm, AddBolillaForm, CardForm } from "./components/Forms";
+import Sidebar, { TipsScreen, TutorScreen } from "./components/Sidebar";
 
 export default function App() {
   const [screen, setScreen] = useState("home");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeMateriaId, setActiveMateriaId] = useState(null);
   const [activeBolillaId, setActiveBolillaId] = useState(null);
   const [newName, setNewName] = useState("");
@@ -49,8 +51,8 @@ export default function App() {
 
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
-    handlePdfUpload, handleImageUpload, generateWithAI, toggleSelectSuggestion, updateSuggestion, removeSuggestion,
-    addManualSuggestion,
+    aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips,
+    askAiTutor, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion,
   } = useAiGenerator(showToast);
 
   const activeMateria = materias.find((m) => m.id === activeMateriaId);
@@ -78,6 +80,10 @@ export default function App() {
 
   return (
     <div style={styles.root}>
+      <Sidebar 
+        isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} 
+        setScreen={setScreen} logout={logout} userData={userData} styles={styles} 
+      />
       {isTourOpen && <TourModal tourSteps={TOUR_STEPS} tourIdx={tourIdx} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen} styles={styles} />}
       {toast && <div className="toast-in" style={{ ...styles.toast, background: toast.type === "error" ? "#FF6B6B" : "#4ECDC4" }}>{toast.msg}</div>}
       {deleteConfirm && <DeleteModal confirm={deleteConfirm} onCancel={() => setDeleteConfirm(null)} onDelete={handleDelete} styles={styles} />}
@@ -88,6 +94,21 @@ export default function App() {
           setScreen={setScreen} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen}
           openAdmin={() => { openAdmin(); setScreen("admin"); }} logout={logout}
           setNewName={setNewName} setActiveMateriaId={setActiveMateriaId}
+          setIsMenuOpen={setIsMenuOpen}
+        />
+      )}
+
+      {screen === "tips" && (
+        <TipsScreen 
+          styles={styles} setScreen={setScreen} 
+          aiTips={aiTips} loading={aiTipsLoading} generateTips={generateStudyTips} 
+        />
+      )}
+
+      {screen === "tutor" && (
+        <TutorScreen 
+          styles={styles} setScreen={setScreen} 
+          chatHistory={chatHistory} loading={chatLoading} askTutor={askAiTutor} 
         />
       )}
 

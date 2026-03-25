@@ -14,6 +14,10 @@ export function useAiGenerator(showToast) {
   const [aiImage, setAiImage] = useState(null); // { data: string, mimeType: string }
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [aiTips, setAiTips] = useState([]);
+  const [aiTipsLoading, setAiTipsLoading] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const handlePdfUpload = async (e) => {
     const file = e.target.files[0];
@@ -93,6 +97,47 @@ export function useAiGenerator(showToast) {
     setAiLoading(false);
   };
 
+  const generateStudyTips = async () => {
+    if (!aiApiKey) return;
+    setAiTipsLoading(true);
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `Genera 5 consejos breves y potentes sobre técnicas de estudio efectivas (como repetición espaciada, active recall, técnica feynman, etc).
+        Usa formato JSON: [ { "title": "...", "msg": "..." } ]`;
+      const res = await model.generateContent(prompt);
+      const text = res.response.text();
+      const cleanJson = text.substring(text.indexOf("["), text.lastIndexOf("]") + 1);
+      setAiTips(JSON.parse(cleanJson));
+    } catch (e) {
+      console.error(e);
+    }
+    setAiTipsLoading(false);
+  };
+
+  const askAiTutor = async (q, img = null) => {
+    if (!aiApiKey || !q.trim()) return;
+    setChatLoading(true);
+    const userMsg = { role: "user", text: q, img };
+    setChatHistory(prev => [...prev, userMsg]);
+    
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      
+      const contents = [{ role: "user", parts: [{ text: `Eres un tutor académico. Explica de forma clara y sencilla el siguiente tema o duda.
+        Duda: ${q}` }] }];
+      if (img) contents[0].parts.push({ inlineData: img });
+
+      const res = await model.generateContent({ contents });
+      const aiText = res.response.text();
+      setChatHistory(prev => [...prev, { role: "ai", text: aiText }]);
+    } catch (e) {
+      setChatHistory(prev => [...prev, { role: "ai", text: "Hubo un error al procesar tu duda. Reintenta pronto." }]);
+    }
+    setChatLoading(false);
+  };
+
   const toggleSelectSuggestion = (id) => {
     setAiSuggestions((prev) => prev.map((s) => (s.id === id ? { ...s, selected: !s.selected } : s)));
   };
@@ -118,9 +163,13 @@ export function useAiGenerator(showToast) {
     aiImage, setAiImage,
     aiLoading, setAiLoading,
     aiSuggestions, setAiSuggestions,
+    aiTips, aiTipsLoading,
+    chatHistory, setChatHistory, chatLoading,
     handlePdfUpload,
     handleImageUpload,
     generateWithAI,
+    generateStudyTips,
+    askAiTutor,
     toggleSelectSuggestion,
     updateSuggestion,
     removeSuggestion,

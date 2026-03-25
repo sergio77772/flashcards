@@ -13,11 +13,19 @@ export default function MateriasScreen({
   logout,
   setNewName,
   setActiveMateriaId,
+  setIsMenuOpen,
   styles,
 }) {
   return (
     <div style={styles.screen}>
       <div style={styles.header}>
+        <button 
+          className="btn-bounce" 
+          style={{ ...styles.backBtn, fontSize: 28, padding: 0, marginRight: 12 }} 
+          onClick={() => setIsMenuOpen(true)}
+        >
+          ☰
+        </button>
         <div style={{ flex: 1 }}>
           <div style={styles.headerTitle}>
             Hola {userData?.name?.split(" ")[0] || "..."}{" "}
@@ -27,43 +35,6 @@ export default function MateriasScreen({
             {loading ? "Sincronizando..." : `${materias.length} materias`}
           </div>
         </div>
-        <button
-          className="btn-bounce"
-          style={{
-            ...styles.studyBtn,
-            background: "rgba(255,255,255,0.2)",
-            border: "1px solid rgba(0,0,0,0.1)",
-            color: "#333",
-            marginRight: 8,
-          }}
-          onClick={() => {
-            setTourIdx(0);
-            setIsTourOpen(true);
-          }}
-        >
-          💡 Tour
-        </button>
-        {userData?.role === "admin" && (
-          <button
-            className="btn-bounce"
-            style={{
-              ...styles.studyBtn,
-              background: "#74B9FF",
-              marginRight: 8,
-              color: "#111",
-            }}
-            onClick={openAdmin}
-          >
-            🛠 Admin
-          </button>
-        )}
-        <button
-          className="btn-bounce"
-          style={{ ...styles.studyBtn, background: "rgba(0,0,0,0.8)" }}
-          onClick={logout}
-        >
-          Salir
-        </button>
       </div>
 
       <Dashboard materias={materias} userData={userData} styles={styles} />
