@@ -30,7 +30,7 @@ export default function AdminScreen({
             <div
               key={u.uid}
               style={{
-                background: "#fff",
+                background: "rgba(255,255,255,0.04)",
                 padding: 16,
                 borderRadius: 16,
                 marginBottom: 12,

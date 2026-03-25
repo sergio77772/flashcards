@@ -24,49 +24,25 @@ export default function AIGenerator({
   const [showApiKey, setShowApiKey] = React.useState(!aiApiKey);
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, background: "#0d0d18" }}>
       {aiLoading && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(247,247,245,0.85)",
-            backdropFilter: "blur(4px)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div style={styles.emptyState}>
-            <div className="loader-card"></div>
-            <div style={{ ...styles.emptyTitle, fontSize: 16, color: "#111" }}>
-              Sincronizando neuronas
-              <span className="loading-dots"></span>
-            </div>
-          </div>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(8,8,16,0.85)", backdropFilter: "blur(12px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+          <div className="loader-card" />
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#9090c0" }}>Generando flashcards<span className="loading-dots" /></div>
         </div>
       )}
-      <div style={{ ...styles.materiaHeader, background: "#111", borderRadius: "0 0 32px 32px", marginBottom: 12 }}>
-        <button
-          style={styles.backBtnLight}
-          onClick={() => setScreen("bolilla")}
-        >
-          ‹
-        </button>
-        <div style={styles.headerTitleLight}>Generación IA ✨</div>
+      <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)", marginBottom: 4 }}>
+        <button style={styles.backBtnLight} onClick={() => setScreen("bolilla")}>‹</button>
+        <div style={styles.headerTitleLight}>Generar con IA ✨</div>
         <div style={{ width: 36 }} />
       </div>
       <div style={styles.formWrap}>
         <div 
-          style={{ 
-            display: "flex", justifyContent: "space-between", alignItems: "center", 
-            marginBottom: 12, cursor: "pointer", background: "#eee", padding: "10px 16px", borderRadius: 12 
-          }}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, cursor: "pointer", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", padding: "10px 16px", borderRadius: 12 }}
           onClick={() => setShowApiKey(!showApiKey)}
         >
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>⚙️ {showApiKey ? "Ocultar" : "Configurar"} API Key</span>
-          <span style={{ fontSize: 10, color: "#888" }}>{showApiKey ? "▴" : "▾"}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#8080b0" }}>⚙️ {showApiKey ? "Ocultar" : "Configurar"} API Key</span>
+          <span style={{ fontSize: 10, color: "#5a5a7a" }}>{showApiKey ? "▴" : "▾"}</span>
         </div>
 
         {showApiKey && (

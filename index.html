@@ -3,7 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mis Bolillas - Flashcards App</title>
+    <title>Mis Bolillas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+      html, body { background: #080810; overscroll-behavior: none; }
+      body { font-family: 'Plus Jakarta Sans', sans-serif; }
+      ::-webkit-scrollbar { display: none; }
+      input, textarea, button { font-family: 'Plus Jakarta Sans', sans-serif; outline: none; }
+      input::placeholder, textarea::placeholder { color: #3a3a5a; }
+      input:focus, textarea:focus { border-color: rgba(124,111,255,0.5) !important; }
+
+      /* Card flip */
+      .card-flip { perspective: 1000px; }
+      .card-inner { transition: transform 0.55s cubic-bezier(.4,2,.3,1); transform-style: preserve-3d; position: relative; }
+      .card-inner.flipped { transform: rotateY(180deg); }
+      .card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius: 28px; padding: 28px; flex-direction: column; }
+      .card-back-face { transform: rotateY(180deg); }
+
+      /* Interactions */
+      .btn-bounce:active { transform: scale(0.95); }
+      .list-item { transition: transform .15s, opacity .15s; }
+      .list-item:active { transform: scale(0.98); opacity: 0.85; }
+
+      /* Animations */
+      @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(16px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+      .toast-anim { animation: toastIn .3s cubic-bezier(.2,.8,.3,1) both; }
+      @keyframes slideUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+      .slide-up { animation: slideUp .4s cubic-bezier(.2,.8,.3,1) both; }
+
+      /* Loading dots */
+      .loading-dots::after { content: ''; animation: dots 1.2s steps(3,end) infinite; }
+      @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+    </style>
   </head>
   <body>
     <div id="root"></div>

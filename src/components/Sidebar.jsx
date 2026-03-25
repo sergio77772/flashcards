@@ -1,7 +1,6 @@
 import React from "react";
 import { STUDY_TIPS } from "../constants";
 
-// Helper to format basic markdown from AI
 const formatAiMsg = (txt) => {
   if (!txt) return "";
   const parts = txt.split(/(\*\*.*?\*\*)/g);
@@ -20,122 +19,76 @@ const formatAiMsg = (txt) => {
 
 export default function Sidebar({ isOpen, onClose, setScreen, logout, userData, styles }) {
   if (!isOpen) return null;
-
   return (
-    <div 
-      style={{
-        position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-        background: "rgba(0,0,0,0.6)", zIndex: 10000,
-        backdropFilter: "blur(4px)"
-      }}
-      onClick={onClose}
-    >
-      <div 
-        style={{
-          width: 300, height: "100%", background: "#fff",
-          padding: "60px 24px", display: "flex", flexDirection: "column",
-          gap: 32, position: "relative",
-          animation: "slideIn 0.3s ease-out forwards"
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        <button 
-          style={{ position: "absolute", top: 20, right: 20, border: "none", background: "none", fontSize: 24, cursor: "pointer" }}
-          onClick={onClose}
-        >
-          ×
-        </button>
+    <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.7)", zIndex: 10000, backdropFilter: "blur(8px)" }} onClick={onClose}>
+      <div style={{ width: 290, height: "100%", background: "#0f0f1a", borderRight: "1px solid rgba(255,255,255,0.07)", padding: "60px 24px 40px", display: "flex", flexDirection: "column", gap: 8, position: "relative", animation: "slideIn 0.28s cubic-bezier(.2,.8,.3,1) forwards" }}
+        onClick={e => e.stopPropagation()}>
+        <button style={{ position: "absolute", top: 18, right: 18, border: "none", background: "rgba(255,255,255,0.06)", width: 34, height: 34, borderRadius: 10, fontSize: 18, color: "#9090c0", cursor: "pointer" }} onClick={onClose}>×</button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#111", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
-             {userData?.name ? userData.name[0] : "U"}
+        {/* User */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, padding: "16px", background: "rgba(255,255,255,0.04)", borderRadius: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ width: 44, height: 44, borderRadius: 14, background: "linear-gradient(135deg, #7c6fff, #4ecdc4)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: "#fff" }}>
+            {userData?.name ? userData.name[0] : "U"}
           </div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{userData?.name || "Usuario"}</div>
-            <div style={{ fontSize: 12, color: "#888" }}>{userData?.role || "Estudiante"}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f0ff" }}>{userData?.name || "Usuario"}</div>
+            <div style={{ fontSize: 12, color: "#5a5a7a", marginTop: 2 }}>{userData?.role || "Estudiante"}</div>
           </div>
         </div>
 
-        <nav style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <SidebarLink icon="🏠" label="Inicio" onClick={() => { setScreen("home"); onClose(); }} />
-          <SidebarLink icon="💡" label="Consejos de Estudio" onClick={() => { setScreen("tips"); onClose(); }} />
-          <SidebarLink icon="👨‍🏫" label="Tutor IA" onClick={() => { setScreen("tutor"); onClose(); }} />
-          {userData?.role === "admin" && (
-            <SidebarLink icon="🛠" label="Panel Admin" onClick={() => { setScreen("admin"); onClose(); }} />
-          )}
-          <SidebarLink icon="📂" label="Mis Materias" onClick={() => { setScreen("home"); onClose(); }} />
+        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {[
+            { icon: "🏠", label: "Inicio", screen: "home" },
+            { icon: "💡", label: "Consejos de Estudio", screen: "tips" },
+            { icon: "👨‍🏫", label: "Tutor IA", screen: "tutor" },
+            { icon: "📂", label: "Mis Materias", screen: "home" },
+            ...(userData?.role === "admin" ? [{ icon: "🛠", label: "Panel Admin", screen: "admin" }] : []),
+          ].map((item) => (
+            <button key={item.label} style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "transparent", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 15, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "background .2s, color .2s" }}
+              onMouseEnter={e => { e.target.style.background = "rgba(255,255,255,0.05)"; e.target.style.color = "#f0f0ff"; }}
+              onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "#8080b0"; }}
+              onClick={() => { setScreen(item.screen); onClose(); }}>
+              <span style={{ fontSize: 20, width: 26, textAlign: "center" }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div style={{ marginTop: "auto" }}>
-          <button 
-            style={{ width: "100%", padding: "14px", borderRadius: 12, border: "1px solid #eee", background: "#f9f9f9", color: "#FF7675", fontWeight: 700, cursor: "pointer" }}
-            onClick={logout}
-          >
-            Log Out
+          <button style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.08)", color: "#ff6b6b", fontWeight: 700, cursor: "pointer", fontSize: 14, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            onClick={logout}>
+            Cerrar Sesión
           </button>
         </div>
       </div>
-      <style>{`
-        @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-      `}</style>
+      <style>{`@keyframes slideIn { from { transform: translateX(-100%); opacity:0; } to { transform: translateX(0); opacity:1; } }`}</style>
     </div>
   );
 }
 
-function SidebarLink({ icon, label, onClick }) {
-  return (
-    <button 
-      style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "none", width: "100%", padding: "10px 0", cursor: "pointer", fontSize: 16, fontWeight: 600, color: "#444" }}
-      onClick={onClick}
-    >
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      {label}
-    </button>
-  );
-}
-
 export function TipsScreen({ styles, setScreen, aiTips, loading, generateTips }) {
-  React.useEffect(() => {
-    if (aiTips.length === 0) generateTips();
-  }, []);
-
+  React.useEffect(() => { if (aiTips.length === 0) generateTips(); }, []);
   return (
-    <div style={{ ...styles.screen, background: "#f9f9f9" }}>
-      <div style={{ ...styles.materiaHeader, background: "#111", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
+    <div style={{ ...styles.screen, background: "#0d0d18" }}>
+      <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
-        <div style={styles.headerTitleLight}>Consejos de Inteligencia 🧠</div>
-        <div style={{ width: 36 }} />
+        <div style={styles.headerTitleLight}>Consejos de Estudio 🧠</div>
       </div>
-      
-      <div style={{ padding: "0 20px 40px", display: "flex", flexDirection: "column", gap: 20 }}>
-        <button 
-          className="btn-bounce"
-          style={{ ...styles.primaryBtn, background: loading ? "#ddd" : "linear-gradient(135deg, #A29BFE, #6C5CE7)", fontSize: 13, padding: "16px", boxShadow: "0 10px 20px rgba(162,155,254,0.3)" }}
-          onClick={generateTips}
-          disabled={loading}
-        >
-          {loading ? "🔄 Generando sabiduría..." : "✨ Generar nuevos consejos"}
+      <div style={{ padding: "16px 18px 100px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+        <button className="btn-bounce" style={{ ...styles.primaryBtn, background: loading ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg, #7c6fff, #5a4fd4)", boxShadow: loading ? "none" : "0 8px 24px rgba(124,111,255,0.3)", fontSize: 14 }}
+          onClick={generateTips} disabled={loading}>
+          {loading ? "🔄 Generando..." : "✨ Nuevos consejos con IA"}
         </button>
-
         {loading && aiTips.length === 0 ? (
-          <div style={{ ...styles.emptyState, marginTop: 40 }}>
-            <div className="loader-card"></div>
-            <p style={{ color: "#666", fontWeight: 700 }}>Consultando a la IA...</p>
+          <div style={styles.emptyState}>
+            <div className="loader-card" />
+            <div style={{ color: "#5a5a7a", fontWeight: 600 }}>Consultando IA...</div>
           </div>
         ) : (
           (aiTips.length > 0 ? aiTips : STUDY_TIPS).map((tip, i) => (
-            <div 
-              key={i} 
-              className="list-item" 
-              style={{ 
-                background: "#fff", padding: 24, borderRadius: 24, border: "1px solid #ebebeb", 
-                boxShadow: "0 8px 30px rgba(0,0,0,0.04)", transition: "all 0.3s" 
-              }}
-            >
-              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10, color: "#111", display: "flex", alignItems: "center", gap: 8 }}>
-                {tip.title}
-              </div>
-              <div style={{ fontSize: 14, color: "#555", lineHeight: 1.6 }}>{tip.msg}</div>
+            <div key={i} className="list-item" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "22px", borderRadius: 20 }}>
+              <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: "#f0f0ff" }}>{tip.title}</div>
+              <div style={{ fontSize: 14, color: "#6060a0", lineHeight: 1.7 }}>{tip.msg}</div>
             </div>
           ))
         )}
@@ -163,89 +116,54 @@ export function TutorScreen({ styles, setScreen, chatHistory, loading, askTutor 
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target.result.split(',')[1];
-      setImg({ data: base64, mimeType: file.type });
-    };
+    reader.onload = (ev) => setImg({ data: ev.target.result.split(",")[1], mimeType: file.type });
     reader.readAsDataURL(file);
   };
 
   return (
-    <div style={{ ...styles.screen, background: "#f0f2f5" }}>
-      <div style={{ ...styles.materiaHeader, background: "#111", borderRadius: "0 0 32px 32px" }}>
+    <div style={{ ...styles.screen, background: "#0d0d18" }}>
+      <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
-        <div style={styles.headerTitleLight}>Tutor Personal ✨</div>
-        <div style={{ width: 36 }} />
+        <div style={styles.headerTitleLight}>Tutor IA ✨</div>
       </div>
 
-      <div 
-        ref={scrollRef}
-        style={{ flex: 1, padding: "20px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}
-      >
+      <div ref={scrollRef} style={{ flex: 1, padding: "16px 18px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
         {chatHistory.length === 0 && (
-          <div style={{ textAlign: "center", color: "#888", marginTop: 40, padding: 40 }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>👨‍🏫</div>
-            <div style={{ fontWeight: 800, color: "#111" }}>¡Hola! Soy tu tutor IA.</div>
-            <div style={{ fontSize: 13 }}>Envíame un texto o una foto de lo que no entiendas y te lo explico.</div>
+          <div style={{ textAlign: "center", padding: "60px 24px" }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>👨‍🏫</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#f0f0ff", marginBottom: 8 }}>Tu Tutor Personal</div>
+            <div style={{ fontSize: 14, color: "#5a5a7a", lineHeight: 1.6 }}>Enviame un texto o foto con tu duda y te lo explico al detalle.</div>
           </div>
         )}
         {chatHistory.map((m, i) => (
-          <div 
-            key={i} 
-            style={{ 
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "85%",
-              background: m.role === "user" ? "#A29BFE" : "#fff",
-              color: m.role === "user" ? "#fff" : "#111",
-              padding: "12px 16px",
-              borderRadius: m.role === "user" ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              fontSize: 14,
-              lineHeight: 1.6
-            }}
-          >
-            {m.img && (
-              <img 
-                src={`data:${m.img.mimeType};base64,${m.img.data}`} 
-                style={{ width: "100%", borderRadius: 12, marginBottom: 8 }} 
-                alt="user query"
-              />
-            )}
+          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "86%", background: m.role === "user" ? "linear-gradient(135deg, #7c6fff, #5a4fd4)" : "rgba(255,255,255,0.05)", border: m.role === "user" ? "none" : "1px solid rgba(255,255,255,0.08)", color: m.role === "user" ? "#fff" : "#d0d0f0", padding: "12px 16px", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px", fontSize: 14, lineHeight: 1.7, boxShadow: m.role === "user" ? "0 4px 16px rgba(124,111,255,0.3)" : "none" }}>
+            {m.img && <img src={`data:${m.img.mimeType};base64,${m.img.data}`} style={{ width: "100%", borderRadius: 10, marginBottom: 10 }} alt="query" />}
             {m.role === "ai" ? formatAiMsg(m.text) : m.text}
           </div>
         ))}
         {loading && (
-          <div style={{ alignSelf: "flex-start", padding: 12, background: "#eee", borderRadius: 12 }}>
-            <span className="loading-dots">Escribiendo</span>
+          <div style={{ alignSelf: "flex-start", padding: "12px 16px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "18px 18px 18px 4px", fontSize: 14, color: "#7070a0" }}>
+            <span className="loading-dots">Pensando</span>
           </div>
         )}
       </div>
 
-      <div style={{ padding: 16, background: "#fff", borderTop: "1px solid #eee" }}>
+      <div style={{ padding: "12px 16px 32px", background: "#0f0f1a", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
         {img && (
-          <div style={{ position: "relative", display: "inline-block", marginBottom: 12 }}>
-            <img src={`data:${img.mimeType};base64,${img.data}`} style={{ height: 60, borderRadius: 8 }} alt="preview" />
-            <button 
-              style={{ position: "absolute", top: -8, right: -8, background: "#FF7675", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12 }}
-              onClick={() => setImg(null)}
-            >×</button>
+          <div style={{ position: "relative", display: "inline-block", marginBottom: 10 }}>
+            <img src={`data:${img.mimeType};base64,${img.data}`} style={{ height: 56, borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)" }} alt="preview" />
+            <button style={{ position: "absolute", top: -8, right: -8, background: "#ff6b6b", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer" }} onClick={() => setImg(null)}>×</button>
           </div>
         )}
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <input type="file" id="tutor-img" style={{ display: "none" }} accept="image/*" onChange={onImgUpload} />
-          <label htmlFor="tutor-img" style={{ fontSize: 24, cursor: "pointer" }}>📸</label>
-          <input 
-            style={{ flex: 1, padding: "12px 16px", borderRadius: 20, border: "1px solid #eee", fontSize: 14, outline: "none" }}
-            placeholder="Escribe tu duda..."
-            value={q}
+          <label htmlFor="tutor-img" style={{ fontSize: 22, cursor: "pointer", opacity: 0.7 }}>📸</label>
+          <input style={{ flex: 1, padding: "12px 18px", borderRadius: 16, border: "1.5px solid rgba(255,255,255,0.08)", fontSize: 14, background: "rgba(255,255,255,0.05)", color: "#f0f0ff", outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            placeholder="Escribe tu duda..." value={q}
             onChange={e => setQ(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSend()}
-          />
-          <button 
-            style={{ padding: "10px 16px", borderRadius: "50%", background: "#111", color: "#fff", border: "none", fontSize: 18 }}
-            onClick={handleSend}
-            disabled={loading}
-          >›</button>
+            onKeyDown={e => e.key === "Enter" && handleSend()} />
+          <button style={{ padding: "12px 16px", borderRadius: 14, background: "linear-gradient(135deg, #7c6fff, #5a4fd4)", color: "#fff", border: "none", fontSize: 18, cursor: "pointer", boxShadow: "0 4px 16px rgba(124,111,255,0.4)" }}
+            onClick={handleSend} disabled={loading}>›</button>
         </div>
       </div>
     </div>

@@ -227,43 +227,23 @@ export default function App() {
       )}
 
       <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sora', sans-serif; }
-        
-        @keyframes toastIn { 
-          from { opacity: 0; transform: translateY(20px) translateX(-50%); } 
-          to { opacity: 1; transform: translateY(0) translateX(-50%); } 
-        }
-        .toast-in { animation: toastIn 0.3s ease-out forwards; }
-        
-        .btn-bounce { transition: transform 0.1s; cursor: pointer; }
+        .btn-bounce { transition: transform 0.12s; cursor: pointer; }
         .btn-bounce:active { transform: scale(0.95); }
-        
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .loader-card { 
-          width: 48px; height: 48px; border: 4px solid #f3f3f3; 
-          border-top: 4px solid #A29BFE; border-radius: 50%; 
-          animation: rotate 1s linear infinite; margin-bottom: 20px;
-        }
-        
-        @keyframes dots { 
-          0%, 20% { content: "."; } 40% { content: ".."; } 60% { content: "..."; } 80%, 100% { content: ""; } 
-        }
-        .loading-dots::after { content: "."; animation: dots 1.5s infinite; }
+        .list-item { transition: transform .15s, opacity .15s; cursor: pointer; }
+        .list-item:active { transform: scale(0.98); opacity: 0.8; }
 
-        /* 3D CARD FLIP */
+        @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(14px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+        .toast-in { animation: toastIn .3s cubic-bezier(.2,.8,.3,1) both; }
+
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .loader-card { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.08); border-top: 3px solid #7c6fff; border-radius: 50%; animation: rotate 0.9s linear infinite; margin-bottom: 16px; }
+        .loading-dots::after { content: "."; animation: dots 1.5s steps(3,end) infinite; }
+        @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+
         .card-flip { perspective: 1000px; width: 100%; display: flex; justify-content: center; }
-        .card-inner {
-          position: relative; width: 100%; height: 100%;
-          transition: transform 0.6s; transform-style: preserve-3d;
-        }
+        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.55s cubic-bezier(.4,2,.3,1); transform-style: preserve-3d; }
         .card-inner.flipped { transform: rotateY(180deg); }
-        .card-face {
-          position: absolute; top: 0; left: 0; 
-          width: 100%; height: 100%;
-          backface-visibility: hidden; -webkit-backface-visibility: hidden;
-          display: flex; align-items: center; justify-content: center;
-          border: 1px solid rgba(0,0,0,0.05); /* To separate from background */
-        }
+        .card-face { position: absolute; top:0; left:0; width:100%; height:100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; display:flex; align-items:center; justify-content:center; }
         .card-back-face { transform: rotateY(180deg); }
       `}</style>
     </div>

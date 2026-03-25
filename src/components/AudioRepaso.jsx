@@ -115,7 +115,7 @@ export default function AudioRepaso({
             width: 100,
             height: 100,
             borderRadius: 50,
-            background: "#fff",
+            background: "rgba(255,255,255,0.04)",
             border: "none",
             display: "flex",
             alignItems: "center",
@@ -156,7 +156,7 @@ export default function AudioRepaso({
             style={{
               height: "100%",
               width: `${((audioIdx + 1) / studyQueue.length) * 100}%`,
-              background: "#fff",
+              background: "rgba(255,255,255,0.04)",
               borderRadius: 2,
               transition: "width 0.3s",
             }}
