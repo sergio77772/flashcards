@@ -1,7 +1,14 @@
 import { useState, useEffect } from "react";
 import { auth, googleProvider, db } from "./firebase";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import * as pdfjsLib from 'pdfjs-dist';
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString();
 
 const COLORS = [
   { bg: "#FF6B6B", light: "#FFE0E0", name: "Rojo" },
@@ -26,7 +33,7 @@ export default function App() {
   const [allUsers, setAllUsers] = useState([]); // Array de usuarios para el admin panel
   const [loading, setLoading] = useState(false);
   
-  // screens: home (materias) | materia (bolillas) | bolilla (cards) | study | addMateria | addBolilla | addCard | editCard | quiz | admin
+  // screens: home (materias) | materia (bolillas) | bolilla (cards) | study | addMateria | addBolilla | addCard | editCard | quiz | admin | aiGenerator
   const [screen, setScreen] = useState("home"); 
   const [activeMateriaId, setActiveMateriaId] = useState(null);
   const [activeBolillaId, setActiveBolillaId] = useState(null);
@@ -65,13 +72,25 @@ export default function App() {
   const [tourIdx, setTourIdx] = useState(0);
   const [isTourOpen, setIsTourOpen] = useState(false);
   
+  // AI Generator states
+  const [aiApiKey, setAiApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem("gemini_api_key") || "");
+  const [aiInputText, setAiInputText] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState([]); // { front, back }
+  const [aiLoading, setAiLoading] = useState(false);
+  
+  // Audio Repaso states
+  const [audioIdx, setAudioIdx] = useState(0);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioStep, setAudioStep] = useState(null); // 'front' | 'wait' | 'back'
+  
   const tourSteps = [
     { title: "¡Bienvenido! 📚", msg: "Esta es tu base de conocimiento. Aquí puedes agrupar tus estudios por Materias." },
     { title: "Dashboard 📊", msg: "Aquí verás tus estadísticas: Racha 🔥, tarjetas Dominadas ✅ y tiempo total de estudio." },
     { title: "Estructura 📂", msg: "Materia > Bolilla > Flashcards. Esta jerarquía te ayuda a organizar programas complejos." },
-    { title: "Modo Repaso (SRS) 🧠", msg: "Nuestro algoritmo de repetición espaciada te avisará qué tarjetas repasar hoy según tu memoria." },
-    { title: "Modo Examen 📝", msg: "Mide tu velocidad y precisión con temporizador y sin ayudas. ¡Ideal para simular el parcial!" },
-    { title: "Voz (TTS) 🔊", msg: "En el modo estudio, toca el icono del parlante para que la app te lea la pregunta o respuesta." }
+    { title: "Progreso de Aprendizaje 📈", msg: "Cada materia y bolilla tiene una barra que muestra cuánto dominas el tema según el algoritmo SRS." },
+    { title: "Generador IA ✨", msg: "¡No pierdas tiempo! Sube un PDF o pega texto y la IA creará las flashcards por ti en segundos." },
+    { title: "Modo Audio Manos Libres 🎧", msg: "Escucha tus apuntes mientras haces otras cosas. La app leerá pregunta y respuesta sola." },
+    { title: "Exámenes y Tests 📝", msg: "Mide tu precisión con temporizador y evalúa tu conocimiento real antes del examen parcial." }
   ];
 
   useEffect(() => {
@@ -121,6 +140,43 @@ export default function App() {
     return () => clearInterval(interval);
   }, [screen, isExam, quizFinished]);
 
+  const [audioTimer, setAudioTimer] = useState(null);
+
+  useEffect(() => {
+    if (screen === "audioRepaso" && audioPlaying) {
+      const currentCard = studyQueue[audioIdx];
+      if (!currentCard) {
+        setAudioPlaying(false);
+        setScreen("home");
+        showToast("Sesión de audio finalizada");
+        return;
+      }
+
+      if (audioStep === "front") {
+        speakText(currentCard.front);
+        const t = setTimeout(() => setAudioStep("wait"), 3500); // 3.5s para pensar
+        setAudioTimer(t);
+      } else if (audioStep === "wait") {
+        const t = setTimeout(() => setAudioStep("back"), 2000); // Pequeña pausa extra
+        setAudioTimer(t);
+      } else if (audioStep === "back") {
+        speakText(currentCard.back);
+        const t = setTimeout(() => {
+          if (audioIdx + 1 < studyQueue.length) {
+            setAudioIdx(prev => prev + 1);
+            setAudioStep("front");
+          } else {
+            setAudioPlaying(false);
+            showToast("Fin del repaso");
+          }
+        }, 5000); // 5s antes de la siguiente
+        setAudioTimer(t);
+      }
+    } else {
+      clearTimeout(audioTimer);
+    }
+    return () => clearTimeout(audioTimer);
+  }, [screen, audioPlaying, audioStep, audioIdx]);
   const fetchData = async (uid) => {
     setLoading(true);
     setAuthLoading(false);
@@ -377,6 +433,29 @@ export default function App() {
     updateStreakAndStats(studyQueue.length * 10); // Estimado: 10s por tarjeta
   };
 
+  const startAudioRepaso = (scope = "materia") => {
+    let targetCards = [];
+    if (scope === "bolilla" && activeBolilla) {
+      targetCards = activeBolilla.cards || [];
+    } else if (scope === "materia" && activeMateria) {
+      targetCards = (activeMateria.bolillas || []).flatMap(b => b.cards || []);
+    }
+    
+    if (targetCards.length === 0) { showToast("No hay tarjetas para leer", "error"); return; }
+    
+    // El reparto es el mismo de estudio: lo pendiente o domindado
+    setStudyQueue([...targetCards].sort(() => 0.5 - Math.random()));
+    setAudioIdx(0);
+    setAudioStep("front");
+    setAudioPlaying(true);
+    setScreen("audioRepaso");
+  };
+
+  const toggleAudio = () => {
+    if (audioPlaying) window.speechSynthesis.cancel();
+    setAudioPlaying(!audioPlaying);
+  };
+
   // --- QUIZ ---
   const startQuiz = (scope = "materia") => {
     let targetCards = [];
@@ -394,7 +473,7 @@ export default function App() {
     const allCards = materias.flatMap(m => m.bolillas || []).flatMap(b => b.cards || []);
     
     const shuffled = [...targetCards].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 10);
+    const selected = shuffled;
     const qs = selected.map(fc => {
       const incorrectPool = allCards.filter(c => c.id !== fc.id);
       // Pescamos máximo 3 opciones incorrectas, pero si hay menos, no pasa nada (usamos .slice)
@@ -446,6 +525,122 @@ export default function App() {
     setExamTimer(0);
     setExamStartTime(Date.now());
     startQuiz(scope);
+  };
+
+  const generateWithAI = async () => {
+    if (!aiInputText.trim() || !aiApiKey) {
+      showToast("Ingresa texto y tu API Key", "error");
+      return;
+    }
+    setAiLoading(true);
+    localStorage.setItem("gemini_api_key", aiApiKey);
+    try {
+      const prompt = `Actúa como un profesor experto. Genera exactamente un array JSON de objetos flashcards {front: string, back: string} a partir del siguiente texto educativo. Las preguntas (front) deben ser directas y las respuestas (back) concisas. No incluyas explicaciones extras fuera del JSON. TEXTO: "${aiInputText}"`;
+      
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${aiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        }
+      );
+
+      if (!response.ok) throw new Error("API falló");
+      
+      const result = await response.json();
+      const output = result.candidates[0].content.parts[0].text;
+      
+      // Limpiar Markdown si lo incluye el modelo
+      const jsonStr = output.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(jsonStr);
+      
+      if (Array.isArray(parsed)) {
+        setAiSuggestions(parsed.map(s => ({ ...s, selected: true, id: generateId() })));
+        showToast("¡Flashcards generadas!");
+      } else {
+        throw new Error("Formato incorrecto");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Error generando con la IA (v1 Flash)", "error");
+    }
+    setAiLoading(false);
+  };
+
+  const handlePdfUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") { showToast("Carga un archivo PDF válido", "error"); return; }
+    
+    setAiLoading(true);
+    setAiInputText("Leyendo PDF... por favor espera.");
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = "";
+      // Solo leemos las primeras 10-15 páginas para no saturar si el PDF es gigante
+      const pagesToRead = Math.min(pdf.numPages, 15);
+      for (let i = 1; i <= pagesToRead; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(item => item.str).join(" ") + " ";
+      }
+      setAiInputText(fullText.trim());
+      showToast("PDF leído con éxito");
+    } catch (e) {
+      console.error(e);
+      showToast("No se pudo leer el PDF", "error");
+      setAiInputText("");
+    }
+    setAiLoading(false);
+  };
+
+  const addManualSuggestion = () => {
+    setAiSuggestions(prev => [...prev, { front: "Nueva pregunta", back: "Respuesta...", selected: true, id: generateId() }]);
+  };
+
+  const updateSuggestion = (id, field, value) => {
+    setAiSuggestions(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
+
+  const toggleSelectSuggestion = (id) => {
+    setAiSuggestions(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s));
+  };
+
+  const removeSuggestion = (id) => {
+    setAiSuggestions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const saveAiFlashcards = () => {
+    const selectedCards = aiSuggestions.filter(s => s.selected);
+    if (selectedCards.length === 0) {
+      showToast("No hay tarjetas seleccionadas", "error");
+      return;
+    }
+    const newCards = selectedCards.map(s => ({
+      id: generateId(),
+      front: s.front,
+      back: s.back,
+      nextReview: Date.now(),
+      interval: 0
+    }));
+    
+    const updatedMateria = {
+      ...activeMateria,
+      bolillas: activeMateria.bolillas.map(b => b.id === activeBolillaId ? {
+        ...b, cards: [...(b.cards || []), ...newCards]
+      } : b)
+    };
+    
+    setMaterias(prev => prev.map(m => m.id === activeMateriaId ? updatedMateria : m));
+    syncMateria(updatedMateria);
+    setAiSuggestions([]);
+    setAiInputText("");
+    setScreen("bolilla");
+    showToast(`Se han guardado ${newCards.length} flashcards.`);
   };
 
   // --- TEXT TO SPEECH (TTS) ---
@@ -592,17 +787,34 @@ export default function App() {
              <div style={styles.list}>
               {materias.map((m) => {
                 const c = COLORS[m.colorIdx] || COLORS[0];
+                const allC = (m.bolillas || []).flatMap(b => b.cards || []);
+                const masteredCount = allC.filter(card => (card.interval || 0) >= 15).length;
+                const progressPct = allC.length > 0 ? Math.round((masteredCount / allC.length) * 100) : 0;
+
                 return (
-                  <div key={m.id} className="list-item" style={{ ...styles.materiaCard, background: c.light, borderLeft: `6px solid ${c.bg}` }}
+                  <div key={m.id} className="list-item" style={{ ...styles.materiaCard, background: c.light, borderLeft: `6px solid ${c.bg}`, flexDirection: "column", alignItems: "flex-start", gap: 12 }}
                     onClick={() => { setActiveMateriaId(m.id); setScreen("materia"); }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ ...styles.dot, background: c.bg }}><span style={{color:"#fff", fontSize: 18, fontWeight:"bold"}}>{m.name[0]?.toUpperCase()}</span></div>
-                      <div>
-                        <div style={styles.itemName}>{m.name}</div>
-                        <div style={styles.itemSub}>{(m.bolillas||[]).length} bolillas</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ ...styles.dot, background: c.bg }}><span style={{color:"#fff", fontSize: 18, fontWeight:"bold"}}>{m.name[0]?.toUpperCase()}</span></div>
+                        <div>
+                          <div style={styles.itemName}>{m.name}</div>
+                          <div style={styles.itemSub}>{(m.bolillas||[]).length} bolillas • {allC.length} tarjetas</div>
+                        </div>
+                      </div>
+                      <div style={styles.arrow}>›</div>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div style={{ width: "100%", marginTop: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: c.bg, fontWeight: 700, marginBottom: 4 }}>
+                        <span>DOMINIO DEL TEMA</span>
+                        <span>{progressPct}%</span>
+                      </div>
+                      <div style={{ height: 6, background: "rgba(0,0,0,0.05)", borderRadius: 3, width: "100%" }}>
+                        <div style={{ height: "100%", width: `${progressPct}%`, background: c.bg, borderRadius: 3, transition: "width 0.5s" }} />
                       </div>
                     </div>
-                    <div style={styles.arrow}>›</div>
                   </div>
                 );
               })}
@@ -667,6 +879,7 @@ export default function App() {
 
           <div style={{ padding: "16px 20px", display: "flex", gap: 12 }}>
             <button className="btn-bounce" style={{...styles.primaryBtn, flex: 2, padding: "14px 8px", background: color.bg}} onClick={() => {setNewName(""); setScreen("addBolilla");}}>+ Añadir Bolilla</button>
+            <button className="btn-bounce" style={{...styles.primaryBtn, flex: 1, padding: "14px 8px", background: "#f0f0f0", color:"#111"}} onClick={() => { startAudioRepaso("materia"); }}>🎧 Audio</button>
             <button className="btn-bounce" style={{...styles.primaryBtn, flex: 1, padding: "14px 8px", background: "#4ECDC4", color:"#111"}} onClick={() => { setIsExam(false); startQuiz("materia"); }}>🧠 Test</button>
             <button className="btn-bounce" style={{...styles.primaryBtn, flex: 1, padding: "14px 8px", background: "#111", color:"#fff"}} onClick={() => startExam("materia")}>📝 Exam</button>
           </div>
@@ -677,15 +890,31 @@ export default function App() {
                 <div style={{ fontSize: 48 }}>📖</div><div style={styles.emptyTitle}>Sin bolillas</div><div style={styles.emptySub}>Agrega la primera bolilla de estudio del programa.</div>
               </div>
             ) : (
-              activeMateria.bolillas.map((b) => (
-                <div key={b.id} className="list-item" style={styles.bolillaCardBase} onClick={() => { setActiveBolillaId(b.id); setScreen("bolilla"); }}>
-                   <div style={styles.itemName}>{b.name}</div>
-                   <div style={{display: "flex", gap: 8, alignItems:"center"}}>
-                     <span style={styles.pill}>{(b.cards||[]).length} cards</span>
-                     <div style={styles.arrow}>›</div>
-                   </div>
-                </div>
-              ))
+              activeMateria.bolillas.map((b) => {
+                const masteredCount = (b.cards || []).filter(card => (card.interval || 0) >= 15).length;
+                const totalCards = (b.cards || []).length;
+                const progressPct = totalCards > 0 ? Math.round((masteredCount / totalCards) * 100) : 0;
+
+                return (
+                  <div key={b.id} className="list-item" style={{...styles.bolillaCardBase, flexDirection: "column", alignItems: "flex-start", gap: 12, padding: "16px 20px"}} onClick={() => { setActiveBolillaId(b.id); setScreen("bolilla"); }}>
+                     <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                        <div style={styles.itemName}>{b.name}</div>
+                        <div style={{display: "flex", gap: 8, alignItems:"center"}}>
+                          <span style={styles.pill}>{totalCards} cards</span>
+                          <div style={styles.arrow}>›</div>
+                        </div>
+                     </div>
+                     
+                     {/* Mini Progress Bar */}
+                     <div style={{ width: "100%" }}>
+                        <div style={{ height: 4, background: "rgba(0,0,0,0.05)", borderRadius: 2, width: "100%" }}>
+                          <div style={{ height: "100%", width: `${progressPct}%`, background: COLORS[activeMateria.colorIdx].bg, borderRadius: 2, transition: "width 0.5s" }} />
+                        </div>
+                        <div style={{ fontSize: 9, color: "#888", marginTop: 4, fontWeight: 600 }}>{progressPct}% COMPLETADO</div>
+                     </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -709,10 +938,13 @@ export default function App() {
                {(activeBolilla.cards||[]).length > 0 && 
                  <button className="btn-bounce" style={{...styles.studyBtn, background: "#111", color: "#fff", fontSize: 13}} onClick={() => startExam("bolilla")}>📝 Exam</button>
                }
-               {(activeBolilla.cards||[]).length > 0 && 
-                 <button className="btn-bounce" style={{...styles.studyBtn, background: "#fff", color: "#111", fontSize: 13}} onClick={startStudy}>▶ Estudiar</button>
-               }
+                {(activeBolilla.cards||[]).length > 0 && 
+                  <button className="btn-bounce" style={{...styles.studyBtn, background: "#fff", color: "#111", fontSize: 13}} onClick={startStudy}>▶ Estudiar</button>
+                }
              </div>
+          </div>
+          <div style={{ padding: "0 20px 16px" }}>
+             <button className="btn-bounce" style={{...styles.primaryBtn, background: "#A29BFE", color: "#fff"}} onClick={() => { setAiSuggestions([]); setScreen("aiGenerator"); }}>✨ Generar con IA (texto)</button>
           </div>
 
           <div style={styles.list}>
@@ -844,7 +1076,88 @@ export default function App() {
         </div>
       )}
 
-      {/* STUDY MODE (SRS) */}
+      {/* AI GENERATOR SCREEN */}
+      {screen === "aiGenerator" && (
+        <div style={styles.screen}>
+          <div style={styles.materiaHeader}>
+            <button style={styles.backBtn} onClick={() => setScreen("bolilla")}>‹</button>
+            <div style={styles.headerTitle}>Generador IA</div>
+            <div style={{width: 36}}/>
+          </div>
+          <div style={styles.formWrap}>
+            <label style={styles.label}>1. Configura tu API Key (Gemini)</label>
+            <input type="password" style={styles.input} placeholder="Pega tu API Key de Google acá..." value={aiApiKey} onChange={e => setAiApiKey(e.target.value)} />
+            <div style={{fontSize: 10, color: "#888", marginBottom: 16}}>Consíguela gratis en makersuite.google.com</div>
+            
+            <label style={styles.label}>2. Sube un PDF o pega tu texto</label>
+            <div style={{ marginBottom: 16 }}>
+               <input 
+                 type="file" 
+                 accept=".pdf" 
+                 id="pdf-upload" 
+                 style={{ display: "none" }} 
+                 onChange={handlePdfUpload} 
+               />
+               <label htmlFor="pdf-upload" style={{ display: "block", background: "#f0f0f0", border: "2px dashed #ccc", padding: "20px", borderRadius: 16, textAlign: "center", cursor: "pointer", color: "#666" }}>
+                 {aiLoading ? "⏳ Procesando documento..." : "📂 Subir PDF para analizar"}
+               </label>
+            </div>
+            
+            <textarea style={{...styles.textarea, height: 180}} placeholder="O pega aquí tus apuntes directamente..." value={aiInputText} onChange={e => setAiInputText(e.target.value)} />
+            
+            <button className="btn-bounce" style={{...styles.primaryBtn, background: aiInputText.trim() && aiApiKey ? "#A29BFE" : "#333", marginTop: 20}} onClick={generateWithAI} disabled={aiLoading || !aiInputText.trim() || !aiApiKey}>
+              {aiLoading ? "Generando..." : "🚀 Generar Flashcards"}
+            </button>
+            
+            {aiSuggestions.length > 0 && (
+              <div style={{ marginTop: 32 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 800 }}>Previsualización ({aiSuggestions.filter(s=>s.selected).length} seleccionadas)</h3>
+                  <button className="btn-bounce" style={{ background: "#A29BFE", color: "#fff", border:"none", padding: "6px 12px", borderRadius: 12, fontSize: 11, fontWeight: 700 }} onClick={addManualSuggestion}>+ Añadir Manual</button>
+                </div>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 30 }}>
+                  {aiSuggestions.map((s, i) => (
+                    <div key={s.id} style={{ 
+                      background: s.selected ? "#fff" : "rgba(255,255,255,0.05)", 
+                      padding: 16, borderRadius: 16, 
+                      border: s.selected ? "1px solid #A29BFE" : "1px solid transparent",
+                      opacity: s.selected ? 1 : 0.6,
+                      transition: "all 0.2s"
+                    }}>
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <input 
+                           type="checkbox" 
+                           checked={s.selected} 
+                           style={{ width: 18, height: 18, accentColor: "#A29BFE" }}
+                           onChange={() => toggleSelectSuggestion(s.id)} 
+                        />
+                        <div style={{ flex: 1 }}>
+                          <textarea 
+                            style={{ width: "100%", background: "transparent", border: "none", color: s.selected ? "#111" : "#888", fontWeight: 800, fontSize: 14, resize: "none", overflow: "hidden" }} 
+                            value={s.front}
+                            onChange={(e) => updateSuggestion(s.id, "front", e.target.value)}
+                          />
+                          <textarea 
+                            style={{ width: "100%", background: "transparent", border: "none", color: s.selected ? "#666" : "#444", fontSize: 13, marginTop: 4, resize: "none", overflow: "hidden" }} 
+                            value={s.back}
+                            onChange={(e) => updateSuggestion(s.id, "back", e.target.value)}
+                          />
+                        </div>
+                        <button style={{ background: "transparent", border: "none", color: "#FF7675", fontSize: 16 }} onClick={() => removeSuggestion(s.id)}>×</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button className="btn-bounce" style={{...styles.primaryBtn, background: "#00B894", flex: 2}} onClick={saveAiFlashcards}>💾 Guardar {aiSuggestions.filter(s=>s.selected).length} seleccionadas</button>
+                  <button className="btn-bounce" style={{...styles.primaryBtn, background: "#333", flex: 1}} onClick={() => setAiSuggestions([])}>Limpiar</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {screen === "study" && (
         <div style={{ ...styles.screen, background: "#111", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "52px 24px 8px" }}>
@@ -909,6 +1222,37 @@ export default function App() {
                 <button className="btn-bounce" style={{...styles.primaryBtn, background: color.bg}} onClick={() => setScreen("bolilla")}>Volver a la bolilla</button>
             </div>
           )}
+        </div>
+      )}
+      {/* AUDIO REPASO SCREEN */}
+      {screen === "audioRepaso" && (
+        <div style={{ ...styles.screen, background: "#111", color: "#fff", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+          <div style={{ position: "absolute", top: 40, width: "100%", padding: "0 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+             <button style={{ background: "transparent", border: "none", color: "#fff", fontSize: 24, cursor: "pointer" }} onClick={() => { setAudioPlaying(false); window.speechSynthesis.cancel(); setScreen("home"); }}>✕</button>
+             <div style={{ fontSize: 14, fontWeight: 700, color: "#888" }}>🎧 MODO AUDIO-REPASO</div>
+             <div style={{ width: 24 }} />
+          </div>
+          
+          <div style={{ fontSize: 80, marginBottom: 40, opacity: 0.1 }}>{audioIdx + 1}/{studyQueue.length}</div>
+          
+          <div style={{ textAlign: "center", padding: "0 40px", minHeight: 180, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+             <div style={{ fontSize: 18, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>{audioStep === "front" ? "PREGUNTA:" : audioStep === "back" ? "RESPUESTA:" : "PIENSA..."}</div>
+             <div style={{ fontSize: 28, fontWeight: 800, color: audioStep === "back" ? "#4ECDC4" : "#fff", lineHeight: 1.3 }}>{audioStep === "back" ? studyQueue[audioIdx]?.back : studyQueue[audioIdx]?.front}</div>
+          </div>
+          
+          <div style={{ display: "flex", alignItems: "center", gap: 32, marginTop: 60 }}>
+             <button style={{ background: "transparent", border: "none", color: "#fff", fontSize: 32, cursor: "pointer" }} onClick={() => { setAudioIdx(prev => Math.max(0, prev - 1)); setAudioStep("front"); }}>⏮</button>
+             <button style={{ width: 100, height: 100, borderRadius: 50, background: "#fff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, cursor: "pointer" }} onClick={toggleAudio}>
+                {audioPlaying ? "⏸" : "▶️"}
+             </button>
+             <button style={{ background: "transparent", border: "none", color: "#fff", fontSize: 32, cursor: "pointer" }} onClick={() => { setAudioIdx(prev => (prev + 1) % studyQueue.length); setAudioStep("front"); }}>⏭</button>
+          </div>
+          
+          <div style={{ marginTop: 40, width: "100%", padding: 24 }}>
+             <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
+                <div style={{ height: "100%", width: `${((audioIdx + 1) / studyQueue.length) * 100}%`, background: "#fff", borderRadius: 2, transition: "width 0.3s" }} />
+             </div>
+          </div>
         </div>
       )}
     </div>
