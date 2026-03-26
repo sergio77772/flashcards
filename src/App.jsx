@@ -21,6 +21,7 @@ import AudioRepaso from "./components/AudioRepaso";
 import { TourModal, DeleteModal } from "./components/Modals";
 import { AddMateriaForm, AddBolillaForm, CardForm } from "./components/Forms";
 import Sidebar, { TipsScreen, TutorScreen } from "./components/Sidebar";
+import DebugLogsScreen from "./components/DebugLogsScreen";
 
 export default function App() {
   const [screen, setScreen] = useState("home");
@@ -41,7 +42,7 @@ export default function App() {
     user, userData, materias, loading, authLoading, allUsers, toast,
     loginGoogle, logout, addMateria, deleteMateria, addBolilla, deleteBolilla,
     addCard, addCards, saveEditCard, deleteCard, rateCard, setMateriaDeadline,
-    updateStudyStats, openAdmin, changeUserRole, setToast, showToast
+    updateStudyStats, openAdmin, changeUserRole, setToast, showToast, debugLogs, fetchDebugLogs
   } = flashcards;
 
   const {
@@ -109,6 +110,13 @@ export default function App() {
         <TutorScreen 
           styles={styles} setScreen={setScreen} 
           chatHistory={chatHistory} loading={chatLoading} askTutor={askAiTutor} 
+        />
+      )}
+
+      {screen === "debugLogs" && (
+        <DebugLogsScreen
+          styles={styles} setScreen={setScreen} 
+          debugLogs={debugLogs} fetchLogs={fetchDebugLogs} 
         />
       )}
 

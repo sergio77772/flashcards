@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { generateId } from "../constants";
+import { db } from "../firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -20,29 +22,57 @@ export function useAiGenerator(showToast) {
   const [chatLoading, setChatLoading] = useState(false);
   const [aiBatchProgress, setAiBatchProgress] = useState(null); // { current: number, total: number }
 
+  const logEvent = async (type, details) => {
+    try {
+      await addDoc(collection(db, "debug_logs"), {
+        type,
+        details,
+        userAgent: navigator.userAgent,
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("No se pudo loguear en Firebase:", e);
+    }
+  };
+
   const handlePdfUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setAiLoading(true);
+    logEvent("PDF_START", { fileName: file.name, fileSize: file.size });
+
     try {
       const reader = new FileReader();
-      reader.onerror = () => {
+      reader.onerror = (err) => {
+        logEvent("PDF_ERROR_READER", { error: err.toString() });
         showToast("Error al leer el archivo", "error");
         setAiLoading(false);
       };
       reader.onload = async (ev) => {
         try {
           const typedarray = new Uint8Array(ev.target.result);
-          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          logEvent("PDF_LOADED_READER", { success: true });
+          
+          const loadingTask = pdfjsLib.getDocument(typedarray);
+          const pdf = await loadingTask.promise;
+          logEvent("PDF_PAGES_COUNT", { count: pdf.numPages });
+          
           let fullText = "";
           for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const t = await page.getTextContent();
-            fullText += t.items.map((it) => it.str).join(" ");
+            try {
+              const page = await pdf.getPage(i);
+              const t = await page.getTextContent();
+              fullText += t.items.map((it) => it.str).join(" ");
+              if (i % 5 === 0) logEvent("PDF_EXTRACT_PROGRESS", { page: i });
+            } catch (pageErr) {
+              logEvent("PDF_PAGE_ERROR", { page: i, error: pageErr.toString() });
+            }
           }
           setAiInputText(fullText);
           showToast("PDF procesado con éxito");
+          logEvent("PDF_SUCCESS", { textLength: fullText.length });
         } catch (err) {
+          logEvent("PDF_ERROR_PROCESO", { error: err.toString(), stack: err.stack });
           showToast("Error al procesar PDF", "error");
         } finally {
           setAiLoading(false);
@@ -50,6 +80,7 @@ export function useAiGenerator(showToast) {
       };
       reader.readAsArrayBuffer(file);
     } catch (err) {
+      logEvent("PDF_ERROR_FATAL", { error: err.toString() });
       showToast("Error al iniciar lectura", "error");
       setAiLoading(false);
     }

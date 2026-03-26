@@ -17,6 +17,8 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  orderBy,
+  limit,
 } from "firebase/firestore";
 import { generateId } from "../constants";
 
@@ -28,6 +30,7 @@ export function useFlashcards() {
   const [authLoading, setAuthLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
   const [toast, setToast] = useState(null);
+  const [debugLogs, setDebugLogs] = useState([]);
 
   // --- AUTH LOGIC ---
   useEffect(() => {
@@ -330,6 +333,12 @@ export function useFlashcards() {
     showToast("Rol actualizado");
   };
 
+  const fetchDebugLogs = async () => {
+    const q = query(collection(db, "debug_logs"), orderBy("timestamp", "desc"), limit(50));
+    const snap = await getDocs(q);
+    setDebugLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+  };
+
   return {
     user,
     userData,
@@ -356,5 +365,7 @@ export function useFlashcards() {
     openAdmin,
     changeUserRole,
     setUserData,
+    debugLogs,
+    fetchDebugLogs,
   };
 }

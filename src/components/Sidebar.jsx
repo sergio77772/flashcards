@@ -54,10 +54,14 @@ export default function Sidebar({ isOpen, onClose, setScreen, logout, userData, 
           ))}
         </nav>
 
-        <div style={{ marginTop: "auto" }}>
-          <button style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.08)", color: "#ff6b6b", fontWeight: 700, cursor: "pointer", fontSize: 14, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          <button style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "rgba(255,255,255,0.03)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            onClick={() => { setScreen("debugLogs"); onClose(); }}>
+            <span style={{ fontSize: 18 }}>🛠️</span> Debug Logs
+          </button>
+          <button style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#ff6b6b", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             onClick={logout}>
-            Cerrar Sesión
+            <span style={{ fontSize: 18 }}>🚪</span> Cerrar Sesión
           </button>
         </div>
       </div>
