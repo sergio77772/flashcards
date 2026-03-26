@@ -13,7 +13,7 @@
     "@supabase/supabase-js": "^2.49.1",
     "@vercel/analytics": "^1.5.0",
     "firebase": "^12.11.0",
-    "pdfjs-dist": "^5.5.207",
+    "pdfjs-dist": "^4.4.168",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
