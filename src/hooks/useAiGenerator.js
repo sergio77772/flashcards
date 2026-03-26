@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { generateId } from "../constants";
 import { db } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+// Usamos la versión LEGACY del worker para máxima compatibilidad con móviles y Vercel
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.4.168/legacy/build/pdf.worker.min.mjs`;
 
 export function useAiGenerator(showToast) {
   const [aiApiKey, setAiApiKey] = useState(
@@ -51,9 +51,16 @@ export function useAiGenerator(showToast) {
       reader.onload = async (ev) => {
         try {
           const typedarray = new Uint8Array(ev.target.result);
-          logEvent("PDF_LOADED_READER", { success: true });
+          logEvent("PDF_LOADED_READER", { success: true, bytes: typedarray.length });
           
-          const loadingTask = pdfjsLib.getDocument(typedarray);
+          // Configuraciones para mayor compatibilidad en móviles
+          const loadingTask = pdfjsLib.getDocument({
+            data: typedarray,
+            disableRange: true,
+            disableStream: true,
+            verbosity: 0
+          });
+
           const pdf = await loadingTask.promise;
           logEvent("PDF_PAGES_COUNT", { count: pdf.numPages });
           
@@ -61,9 +68,18 @@ export function useAiGenerator(showToast) {
           for (let i = 1; i <= pdf.numPages; i++) {
             try {
               const page = await pdf.getPage(i);
-              const t = await page.getTextContent();
-              fullText += t.items.map((it) => it.str).join(" ");
-              if (i % 5 === 0) logEvent("PDF_EXTRACT_PROGRESS", { page: i });
+              // Usar un timeout pequeño para no bloquear el hilo principal en el móvil
+              const textContent = await page.getTextContent();
+              
+              const pageText = textContent.items
+                .map((it) => it.str || "")
+                .join(" ");
+              
+              fullText += pageText + " ";
+              
+              if (i % 10 === 0 || i === pdf.numPages) {
+                logEvent("PDF_EXTRACT_PROGRESS", { page: i, total: pdf.numPages });
+              }
             } catch (pageErr) {
               logEvent("PDF_PAGE_ERROR", { page: i, error: pageErr.toString() });
             }
