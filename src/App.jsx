@@ -29,6 +29,7 @@ import CardFormPage from "./pages/CardFormPage";
 import AddBolillaPage from "./pages/AddBolillaPage";
 import AddMateriaPage from "./pages/AddMateriaPage";
 import Achievements from "./pages/Achievements";
+import ConversationMode from "./pages/ConversationMode";
 
 export default function App() {
   const [screen, setScreen] = useState("home");
@@ -71,7 +72,8 @@ export default function App() {
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
     aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips,
-    askAiTutor, enhanceFlashcard, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
+    askAiTutor, enhanceFlashcard, startConversation, answerConversation, convHistory, setConvHistory, convLoading,
+    toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
   } = useAiGenerator(showToast);
 
   const [studyMode, setStudyMode] = useState("normal"); // normal, random, smart
@@ -157,6 +159,16 @@ export default function App() {
             setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
             enhanceFlashcard={enhanceFlashcard}
             studyMode={studyMode} setStudyMode={setStudyMode}
+          />
+        } />
+
+        <Route path="/materia/:materiaId/bolilla/:bolillaId/conversation" element={
+          <ConversationMode
+            materias={materias} styles={styles}
+            convHistory={convHistory} setConvHistory={setConvHistory}
+            convLoading={convLoading} startConversation={startConversation}
+            answerConversation={answerConversation}
+            userData={userData}
           />
         } />
 

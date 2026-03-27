@@ -65,10 +65,12 @@ export default function Sidebar({ isOpen, onClose, logout, userData, styles, sta
         </nav>
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-          <button style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "rgba(255,255,255,0.03)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            onClick={() => { navigate("/debug-logs"); onClose(); }}>
-            <span style={{ fontSize: 18 }}>🛠️</span> Debug Logs
-          </button>
+          {userData?.role === "admin" && (
+            <button style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "rgba(255,255,255,0.03)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              onClick={() => { navigate("/debug-logs"); onClose(); }}>
+              <span style={{ fontSize: 18 }}>🛠️</span> Debug Logs
+            </button>
+          )}
           <button style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#ff6b6b", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             onClick={logout}>
             <span style={{ fontSize: 18 }}>🚪</span> Cerrar Sesión

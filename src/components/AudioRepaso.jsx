@@ -1,4 +1,4 @@
-import React from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function AudioRepaso({
   studyQueue,
@@ -11,11 +11,12 @@ export default function AudioRepaso({
   setScreen,
   styles,
 }) {
+  const navigate = useNavigate();
   return (
     <div
       style={{
         ...styles.screen,
-        background: "#111",
+        background: "#0d0d18",
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -24,18 +25,18 @@ export default function AudioRepaso({
         style={{
           position: "absolute",
           top: 52,
-          left: 24,
-          right: 24,
+          left: 20,
+          right: 20,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
         <button
-          style={styles.studyBackBtn}
+          style={styles.backBtnLight}
           onClick={() => {
             window.speechSynthesis.cancel();
-            setScreen("home");
+            navigate(-1);
           }}
         >
           ‹

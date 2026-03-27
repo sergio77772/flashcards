@@ -51,6 +51,10 @@ export const TOUR_STEPS = [
     msg: "Elegí tu estilo: 'Normal' para seguir el orden, 'Aleatorio' (🔀) para romper la rutina, o 'Inteligente' (🧠) para atacar primero las tarjetas que más te cuestan.",
   },
   {
+    title: "🎙 Modo Conversación",
+    msg: "¡El examen definitivo! Hablá con el Profesor IA. Te hará preguntas orales basadas en tus tarjetas y evaluará tus respuestas en tiempo real. ¡Ideal para orales!",
+  },
+  {
     title: "🧠 Repetición Espaciada (SRS)",
     msg: "Nuestro algoritmo calcula exactamente cuándo debés repasar cada tarjeta. Una tarjeta se considera 'Dominada' tras varios aciertos. ¡Confiá en el proceso!",
   },

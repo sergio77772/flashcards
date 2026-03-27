@@ -271,6 +271,57 @@ export function useAiGenerator(showToast) {
     ]);
   };
 
+  const [convHistory, setConvHistory] = useState([]);
+  const [convLoading, setConvLoading] = useState(false);
+
+  const startConversation = async (card, userName = "Alumno") => {
+    if (!aiApiKey) return;
+    setConvLoading(true);
+    setConvHistory([]);
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `Actúa como un profesor examinador formal y motivador. El alumno se llama ${userName}.
+        Inicia el examen saludando brevemente por su nombre y luego pregúntame sobre el siguiente tema de forma concisa pero desafiante: "${card.front}".
+        No des la respuesta todavía, solo haz la pregunta inicial. Evita corchetes o placeholders como [Apellido].`;
+      
+      const res = await model.generateContent(prompt);
+      const text = res.response.text();
+      setConvHistory([{ role: "ai", text }]);
+    } catch (e) {
+      console.error(e);
+    }
+    setConvLoading(false);
+  };
+
+  const answerConversation = async (userAnswer, card, nextCard = null) => {
+    if (!aiApiKey) return;
+    setConvLoading(true);
+    setConvHistory(prev => [...prev, { role: "user", text: userAnswer }]);
+    
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      
+      const prompt = `Actúa como un profesor examinador. 
+        El alumno acaba de responder a la pregunta sobre "${card.front}".
+        Respuesta correcta esperada (Dorso de la tarjeta): "${card.back}"
+        Respuesta del alumno: "${userAnswer}"
+        
+        Evalúa brevemente si es correcta, parcial o incorrecta. Da un feedback constructivo.
+        ${nextCard ? `Luego, haz la siguiente pregunta sobre: "${nextCard.front}".` : "Has terminado con este tema por ahora."}
+        
+        Usa un tono profesional y motivador.`;
+
+      const res = await model.generateContent(prompt);
+      const text = res.response.text();
+      setConvHistory(prev => [...prev, { role: "ai", text }]);
+    } catch (e) {
+      console.error(e);
+    }
+    setConvLoading(false);
+  };
+
   return {
     aiApiKey, setAiApiKey,
     aiInputText, setAiInputText,
@@ -279,12 +330,15 @@ export function useAiGenerator(showToast) {
     aiSuggestions, setAiSuggestions,
     aiTips, aiTipsLoading,
     chatHistory, setChatHistory, chatLoading,
+    convHistory, setConvHistory, convLoading,
     handlePdfUpload,
     handleImageUpload,
     generateWithAI,
     generateStudyTips,
     askAiTutor,
     enhanceFlashcard,
+    startConversation,
+    answerConversation,
     toggleSelectSuggestion,
     updateSuggestion,
     removeSuggestion,
