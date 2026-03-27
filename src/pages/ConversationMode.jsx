@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { COLORS } from "../constants";
 
 export default function ConversationMode({
-  materias, styles, convHistory, setConvHistory, convLoading, startConversation, answerConversation
+  materias, styles, convHistory, setConvHistory, convLoading, startConversation, answerConversation,
+  userData
 }) {
   const { materiaId, bolillaId } = useParams();
   const navigate = useNavigate();
@@ -18,9 +19,9 @@ export default function ConversationMode({
 
   useEffect(() => {
     if (cards.length > 0 && convHistory.length === 0) {
-      startConversation(cards[0]);
+      startConversation(cards[0], userData?.name || "Alumno");
     }
-  }, [cards, convHistory]);
+  }, [cards, convHistory, userData]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
