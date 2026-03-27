@@ -1,17 +1,29 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function AdminScreen({
   allUsers,
   setScreen,
   changeUserRole,
   user,
+  userData,
   setUserData,
   styles,
+  openAdmin,
 }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (userData?.role === "admin" && allUsers?.length === 0) {
+      openAdmin();
+    }
+  }, [userData, allUsers, openAdmin]);
+
+  if (userData?.role !== "admin") return null;
   return (
     <div style={styles.screen}>
       <div style={{ ...styles.materiaHeader, background: "#111" }}>
-        <button style={styles.backBtnLight} onClick={() => setScreen("home")}>
+        <button style={styles.backBtnLight} onClick={() => navigate(-1)}>
           ‹
         </button>
         <div style={styles.headerTitleLight}>Panel de Administración</div>

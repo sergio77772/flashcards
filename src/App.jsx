@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useMatch } from "react-router-dom";
 import { COLORS, TOUR_STEPS, formatTime } from "./constants";
 import { styles } from "./styles";
 
@@ -8,20 +9,25 @@ import { useQuiz } from "./hooks/useQuiz";
 import { useAiGenerator } from "./hooks/useAiGenerator";
 import { useVoice } from "./hooks/useVoice";
 
-// Components
+// Components (still used in routes or as shared UI)
 import LoginScreen from "./components/LoginScreen";
-import MateriasScreen from "./components/MateriasScreen";
 import AdminScreen from "./components/AdminScreen";
-import MateriaDetailScreen from "./components/MateriaDetailScreen";
-import BolillaDetailScreen from "./components/BolillaDetailScreen";
-import QuizMode from "./components/QuizMode";
-import AIGenerator from "./components/AIGenerator";
-import StudyMode from "./components/StudyMode";
 import AudioRepaso from "./components/AudioRepaso";
 import { TourModal, DeleteModal } from "./components/Modals";
 import { AddMateriaForm, AddBolillaForm, CardForm } from "./components/Forms";
 import Sidebar, { TipsScreen, TutorScreen } from "./components/Sidebar";
 import DebugLogsScreen from "./components/DebugLogsScreen";
+
+// Pages
+import Home from "./pages/Home";
+import MateriaDetail from "./pages/MateriaDetail";
+import BolillaDetail from "./pages/BolillaDetail";
+import Study from "./pages/Study";
+import AIGeneratorPage from "./pages/AIGenerator";
+import Quiz from "./pages/Quiz";
+import CardFormPage from "./pages/CardFormPage";
+import AddBolillaPage from "./pages/AddBolillaPage";
+import AddMateriaPage from "./pages/AddMateriaPage";
 
 export default function App() {
   const [screen, setScreen] = useState("home");
@@ -36,6 +42,17 @@ export default function App() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [tourIdx, setTourIdx] = useState(0);
+
+  const matchM = useMatch("/materia/:id/*");
+  const matchB = useMatch("/materia/:materiaId/bolilla/:bolillaId/*");
+  const matchS = useMatch("/materia/:materiaId/study/:bolillaId?/*");
+  const mId = matchB?.params.materiaId || matchS?.params.materiaId || matchM?.params.id;
+  const bId = matchB?.params.bolillaId || matchS?.params.bolillaId;
+
+  React.useEffect(() => {
+    if (mId && mId !== activeMateriaId) setActiveMateriaId(mId);
+    if (bId && bId !== activeBolillaId) setActiveBolillaId(bId);
+  }, [mId, bId]);
 
   const flashcards = useFlashcards();
   const {
@@ -89,151 +106,153 @@ export default function App() {
       {toast && <div className="toast-in" style={{ ...styles.toast, background: toast.type === "error" ? "#FF6B6B" : "#4ECDC4" }}>{toast.msg}</div>}
       {deleteConfirm && <DeleteModal confirm={deleteConfirm} onCancel={() => setDeleteConfirm(null)} onDelete={handleDelete} styles={styles} />}
 
-      {screen === "home" && (
-        <MateriasScreen
-          userData={userData} loading={loading} materias={materias} styles={styles}
-          setScreen={setScreen} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen}
-          openAdmin={() => { openAdmin(); setScreen("admin"); }} logout={logout}
-          setNewName={setNewName} setActiveMateriaId={setActiveMateriaId}
-          setIsMenuOpen={setIsMenuOpen}
-        />
-      )}
+      <Routes>
+        <Route path="/" element={
+          <Home
+            userData={userData} loading={loading} materias={materias} styles={styles}
+            setScreen={setScreen} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen}
+            openAdmin={openAdmin} logout={logout}
+            setNewName={setNewName} setActiveMateriaId={setActiveMateriaId}
+            setIsMenuOpen={setIsMenuOpen}
+          />
+        } />
 
-      {screen === "tips" && (
-        <TipsScreen 
-          styles={styles} setScreen={setScreen} 
-          aiTips={aiTips} loading={aiTipsLoading} generateTips={generateStudyTips} 
-        />
-      )}
+        <Route path="/materia/:id" element={
+          <MateriaDetail
+            materias={materias} setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
+            setMateriaDeadline={setMateriaDeadline}
+            setNewName={setNewName} startAudioRepaso={startAudioRepaso}
+            setIsExam={setIsExam} startQuiz={startQuiz}
+            startExam={startExam}
+            setActiveBolillaId={setActiveBolillaId}
+          />
+        } />
 
-      {screen === "tutor" && (
-        <TutorScreen 
-          styles={styles} setScreen={setScreen} 
-          chatHistory={chatHistory} loading={chatLoading} askTutor={askAiTutor} 
-        />
-      )}
+        <Route path="/materia/:materiaId/bolilla/:bolillaId" element={
+          <BolillaDetail
+            materias={materias} setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
+            setIsExam={setIsExam} startQuiz={startQuiz}
+            startExam={startExam} startStudy={startStudy} setAiSuggestions={setAiSuggestions}
+            setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
+          />
+        } />
 
-      {screen === "debugLogs" && (
-        <DebugLogsScreen
-          styles={styles} setScreen={setScreen} 
-          debugLogs={debugLogs} fetchLogs={fetchDebugLogs} 
-        />
-      )}
+        <Route path="/materia/:materiaId/study/:bolillaId?" element={
+          <Study
+            isStudyFinished={isStudyFinished} activeCardIdx={activeCardIdx} studyQueue={activeQueue}
+            flipped={flipped} setFlipped={setFlipped} styles={styles}
+            rateCard={(q) => {
+              // Usamos mId y bId extraídos directamente de la URL para mayor confiabilidad
+              rateCard(mId, bId, activeQueue[activeCardIdx]?.id, q, updateStudyStats);
+              if (activeCardIdx + 1 < activeQueue.length) { setActiveCardIdx(activeCardIdx + 1); setFlipped(false); }
+              else setIsStudyFinished(true);
+            }}
+            speakText={speakText} color={color}
+          />
+        } />
 
-      {screen === "admin" && (
-        <AdminScreen
-          allUsers={allUsers} setScreen={setScreen} changeUserRole={changeUserRole}
-          user={user} styles={styles}
-        />
-      )}
+        <Route path="/quiz" element={
+          <Quiz
+            isExam={isExam} quizFinished={quizFinished} quizIdx={quizIdx}
+            quizQuestions={quizQuestions} examTimer={examTimer} selectedAnswer={selectedAnswer}
+            quizScore={quizScore} handleQuizAnswer={handleQuizAnswer} styles={styles}
+            startExam={startExam} startQuiz={startQuiz}
+            setIsExam={setIsExam} setSelectedAnswer={setSelectedAnswer}
+            formatTime={formatTime}
+          />
+        } />
 
-      {screen === "materia" && activeMateria && (
-        <MateriaDetailScreen
-          activeMateria={activeMateria} activeMateriaId={activeMateriaId} color={color}
-          setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
-          setMateriaDeadline={(d) => setMateriaDeadline(activeMateriaId, d)}
-          setNewName={setNewName} startAudioRepaso={() => startAudioRepaso(activeQueue)}
-          setIsExam={setIsExam} startQuiz={() => startQuiz("materia", materias, activeMateriaId)}
-          startExam={() => startExam("materia", materias, activeMateriaId)}
-          setActiveBolillaId={setActiveBolillaId}
-        />
-      )}
+        <Route path="/ai-generator" element={
+          <AIGeneratorPage
+            aiApiKey={aiApiKey} setAiApiKey={setAiApiKey} aiInputText={aiInputText} setAiInputText={setAiInputText}
+            aiImage={aiImage} setAiImage={setAiImage} handleImageUpload={handleImageUpload}
+            aiLoading={aiLoading} aiSuggestions={aiSuggestions} setAiSuggestions={setAiSuggestions}
+            handlePdfUpload={handlePdfUpload} generateWithAI={generateWithAI} styles={styles}
+            toggleSelectSuggestion={toggleSelectSuggestion} updateSuggestion={updateSuggestion}
+            removeSuggestion={removeSuggestion} addManualSuggestion={addManualSuggestion}
+            aiBatchProgress={aiBatchProgress}
+            saveAiFlashcards={async () => {
+              const selected = aiSuggestions.filter(s => s.selected);
+              setAiLoading(true);
+              try {
+                await addCards(activeMateriaId, activeBolillaId, selected);
+                setAiSuggestions([]);
+              } finally {
+                setAiLoading(false);
+              }
+            }}
+          />
+        } />
 
-      {screen === "bolilla" && activeBolilla && (
-        <BolillaDetailScreen
-          activeBolilla={activeBolilla} activeBolillaId={activeBolillaId} color={color}
-          setScreen={setScreen} setDeleteConfirm={setDeleteConfirm} styles={styles}
-          setIsExam={setIsExam} startQuiz={() => startQuiz("bolilla", materias, activeMateriaId, activeBolillaId)}
-          startExam={() => startExam("bolilla", materias, activeMateriaId, activeBolillaId)}
-          startStudy={() => startStudy(activeQueue)} setAiSuggestions={setAiSuggestions}
-          setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
-        />
-      )}
+        <Route path="/admin" element={
+          <AdminScreen
+            allUsers={allUsers} setScreen={() => {}} changeUserRole={changeUserRole}
+            user={user} userData={userData} styles={styles} openAdmin={openAdmin}
+          />
+        } />
 
-      {screen === "addMateria" && (
-        <AddMateriaForm
-          newName={newName} setNewName={setNewName} newColorIdx={newColorIdx} setNewColorIdx={setNewColorIdx}
-          onSubmit={() => { addMateria(newName, newColorIdx); setScreen("home"); }}
-          onCancel={() => setScreen("home")} styles={styles}
-        />
-      )}
+        <Route path="/debug-logs" element={
+          <DebugLogsScreen
+            styles={styles} setScreen={() => {}} 
+            debugLogs={debugLogs} fetchLogs={fetchDebugLogs} 
+          />
+        } />
 
-      {screen === "addBolilla" && (
-        <AddBolillaForm
-          newName={newName} setNewName={setNewName} color={color} styles={styles}
-          onSubmit={() => { addBolilla(activeMateriaId, newName); setScreen("materia"); }}
-          onCancel={() => setScreen("materia")}
-        />
-      )}
+        <Route path="/tips" element={
+          <TipsScreen 
+            styles={styles} setScreen={() => {}} 
+            aiTips={aiTips} loading={aiTipsLoading} generateTips={generateStudyTips} 
+          />
+        } />
 
-      {(screen === "addCard" || screen === "editCard") && (
-        <CardForm
-          isEdit={screen === "editCard"} front={cardFront} setFront={setCardFront}
-          back={cardBack} setBack={setCardBack} color={color} styles={styles}
-          onCancel={() => setScreen("bolilla")}
-          onSubmit={() => {
-            if (screen === "addCard") addCard(activeMateriaId, activeBolillaId, cardFront, cardBack);
-            else saveEditCard(activeMateriaId, activeBolillaId, editingCardId, cardFront, cardBack);
-            setScreen("bolilla");
-          }}
-        />
-      )}
+        <Route path="/tutor" element={
+          <TutorScreen 
+            styles={styles} setScreen={() => {}} 
+            chatHistory={chatHistory} loading={chatLoading} askTutor={askAiTutor} 
+          />
+        } />
 
-      {screen === "quiz" && (
-        <QuizMode
-          screen={screen} isExam={isExam} quizFinished={quizFinished} quizIdx={quizIdx}
-          quizQuestions={quizQuestions} examTimer={examTimer} selectedAnswer={selectedAnswer}
-          quizScore={quizScore} handleQuizAnswer={handleQuizAnswer} styles={styles}
-          startExam={() => startExam("bolilla", materias, activeMateriaId, activeBolillaId)}
-          startQuiz={() => startQuiz("bolilla", materias, activeMateriaId, activeBolillaId)}
-          setScreen={setScreen} setIsExam={setIsExam} setSelectedAnswer={setSelectedAnswer}
-          formatTime={formatTime}
-        />
-      )}
+        <Route path="/audio-repaso" element={
+          <AudioRepaso
+            studyQueue={activeQueue} audioIdx={audioIdx} audioPlaying={audioPlaying} audioStep={audioStep}
+            setAudioIdx={setAudioIdx} setAudioStep={setAudioStep} toggleAudio={toggleAudio}
+            setScreen={() => {}} styles={styles}
+          />
+        } />
 
-      {screen === "aiGenerator" && (
-        <AIGenerator
-          aiApiKey={aiApiKey} setAiApiKey={setAiApiKey} aiInputText={aiInputText} setAiInputText={setAiInputText}
-          aiImage={aiImage} setAiImage={setAiImage} handleImageUpload={handleImageUpload}
-          aiLoading={aiLoading} aiSuggestions={aiSuggestions} setAiSuggestions={setAiSuggestions}
-          handlePdfUpload={handlePdfUpload} generateWithAI={generateWithAI} styles={styles}
-          toggleSelectSuggestion={toggleSelectSuggestion} updateSuggestion={updateSuggestion}
-          removeSuggestion={removeSuggestion} addManualSuggestion={addManualSuggestion}
-          aiBatchProgress={aiBatchProgress}
-          saveAiFlashcards={async () => {
-            const selected = aiSuggestions.filter(s => s.selected);
-            setAiLoading(true);
-            try {
-              await addCards(activeMateriaId, activeBolillaId, selected);
-              setAiSuggestions([]); setScreen("bolilla");
-            } finally {
-              setAiLoading(false);
-            }
-          }}
-          setScreen={setScreen}
-        />
-      )}
+        <Route path="/add-materia" element={
+          <AddMateriaPage
+            newName={newName} setNewName={setNewName}
+            newColorIdx={newColorIdx} setNewColorIdx={setNewColorIdx}
+            styles={styles} addMateria={addMateria}
+          />
+        } />
 
-      {screen === "study" && (
-        <StudyMode
-          isStudyFinished={isStudyFinished} activeCardIdx={activeCardIdx} studyQueue={activeQueue}
-          flipped={flipped} setFlipped={setFlipped} styles={styles}
-          rateCard={(q) => {
-            rateCard(activeMateriaId, activeBolillaId, activeQueue[activeCardIdx].id, q, updateStudyStats);
-            if (activeCardIdx + 1 < activeQueue.length) { setActiveCardIdx(activeCardIdx + 1); setFlipped(false); }
-            else setIsStudyFinished(true);
-          }}
-          speakText={speakText} setScreen={setScreen} color={color}
-        />
-      )}
+        <Route path="/add-bolilla/:materiaId" element={
+          <AddBolillaPage
+            newName={newName} setNewName={setNewName}
+            color={color} styles={styles} addBolilla={addBolilla}
+          />
+        } />
 
-      {screen === "audioRepaso" && (
-        <AudioRepaso
-          studyQueue={activeQueue} audioIdx={audioIdx} audioPlaying={audioPlaying} audioStep={audioStep}
-          setAudioIdx={setAudioIdx} setAudioStep={setAudioStep} toggleAudio={toggleAudio}
-          setScreen={setScreen} styles={styles}
-        />
-      )}
+        <Route path="/add-card" element={
+          <CardFormPage
+            isEdit={false} front={cardFront} setFront={setCardFront}
+            back={cardBack} setBack={setCardBack} color={color} styles={styles}
+            onSave={() => addCard(activeMateriaId, activeBolillaId, cardFront, cardBack)}
+          />
+        } />
+
+        <Route path="/edit-card" element={
+          <CardFormPage
+            isEdit={true} front={cardFront} setFront={setCardFront}
+            back={cardBack} setBack={setCardBack} color={color} styles={styles}
+            onSave={() => saveEditCard(activeMateriaId, activeBolillaId, editingCardId, cardFront, cardBack)}
+          />
+        } />
+
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
 
       <style>{`
         .btn-bounce { transition: transform 0.12s; cursor: pointer; }

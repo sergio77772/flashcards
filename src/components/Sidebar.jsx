@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { STUDY_TIPS } from "../constants";
 
 const formatAiMsg = (txt) => {
@@ -17,7 +18,8 @@ const formatAiMsg = (txt) => {
   });
 };
 
-export default function Sidebar({ isOpen, onClose, setScreen, logout, userData, styles }) {
+export default function Sidebar({ isOpen, onClose, logout, userData, styles }) {
+  const navigate = useNavigate();
   if (!isOpen) return null;
   return (
     <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.7)", zIndex: 10000, backdropFilter: "blur(8px)" }} onClick={onClose}>
@@ -38,16 +40,16 @@ export default function Sidebar({ isOpen, onClose, setScreen, logout, userData, 
 
         <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {[
-            { icon: "🏠", label: "Inicio", screen: "home" },
-            { icon: "💡", label: "Consejos de Estudio", screen: "tips" },
-            { icon: "👨‍🏫", label: "Tutor IA", screen: "tutor" },
-            { icon: "📂", label: "Mis Materias", screen: "home" },
-            ...(userData?.role === "admin" ? [{ icon: "🛠", label: "Panel Admin", screen: "admin" }] : []),
+            { icon: "🏠", label: "Inicio", path: "/" },
+            { icon: "💡", label: "Consejos de Estudio", path: "/tips" },
+            { icon: "👨‍🏫", label: "Tutor IA", path: "/tutor" },
+            { icon: "📂", label: "Mis Materias", path: "/" },
+            ...(userData?.role === "admin" ? [{ icon: "🛠", label: "Panel Admin", path: "/admin" }] : []),
           ].map((item) => (
             <button key={item.label} style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "transparent", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 15, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "background .2s, color .2s" }}
               onMouseEnter={e => { e.target.style.background = "rgba(255,255,255,0.05)"; e.target.style.color = "#f0f0ff"; }}
               onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "#8080b0"; }}
-              onClick={() => { setScreen(item.screen); onClose(); }}>
+              onClick={() => { navigate(item.path); onClose(); }}>
               <span style={{ fontSize: 20, width: 26, textAlign: "center" }}>{item.icon}</span>
               {item.label}
             </button>
@@ -56,7 +58,7 @@ export default function Sidebar({ isOpen, onClose, setScreen, logout, userData, 
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
           <button style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "rgba(255,255,255,0.03)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            onClick={() => { setScreen("debugLogs"); onClose(); }}>
+            onClick={() => { navigate("/debug-logs"); onClose(); }}>
             <span style={{ fontSize: 18 }}>🛠️</span> Debug Logs
           </button>
           <button style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#ff6b6b", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -70,12 +72,13 @@ export default function Sidebar({ isOpen, onClose, setScreen, logout, userData, 
   );
 }
 
-export function TipsScreen({ styles, setScreen, aiTips, loading, generateTips }) {
+export function TipsScreen({ styles, aiTips, loading, generateTips }) {
+  const navigate = useNavigate();
   React.useEffect(() => { if (aiTips.length === 0) generateTips(); }, []);
   return (
     <div style={{ ...styles.screen, background: "#0d0d18" }}>
       <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
+        <button style={styles.backBtnLight} onClick={() => navigate(-1)}>‹</button>
         <div style={styles.headerTitleLight}>Consejos de Estudio 🧠</div>
       </div>
       <div style={{ padding: "16px 18px 100px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
@@ -101,7 +104,8 @@ export function TipsScreen({ styles, setScreen, aiTips, loading, generateTips })
   );
 }
 
-export function TutorScreen({ styles, setScreen, chatHistory, loading, askTutor }) {
+export function TutorScreen({ styles, chatHistory, loading, askTutor }) {
+  const navigate = useNavigate();
   const [q, setQ] = React.useState("");
   const [img, setImg] = React.useState(null);
   const scrollRef = React.useRef();
@@ -127,7 +131,7 @@ export function TutorScreen({ styles, setScreen, chatHistory, loading, askTutor 
   return (
     <div style={{ ...styles.screen, background: "#0d0d18" }}>
       <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
+        <button style={styles.backBtnLight} onClick={() => navigate(-1)}>‹</button>
         <div style={styles.headerTitleLight}>Tutor IA ✨</div>
       </div>
 

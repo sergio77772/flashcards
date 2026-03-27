@@ -64,6 +64,9 @@ export function useFlashcards() {
           streak: 0,
           lastStudy: null,
           mastered: 0,
+          xp: 0,
+          level: 1,
+          achievements: [],
         };
         await setDoc(doc(db, "users", user.uid), newData);
         setUserData(newData);
@@ -245,45 +248,48 @@ export function useFlashcards() {
   ) => {
     const m = materias.find((m) => m.id === activeMateriaId);
     if (!m) return;
+
     const updatedBolillas = m.bolillas.map((b) => {
-      if (b.id === activeBolillaId) {
-        return {
-          ...b,
-          cards: b.cards.map((c) => {
-            if (c.id === cardId) {
-              let { interval, ease } = c;
-              if (quality >= 1) {
-                if (interval === 0) interval = 1;
-                else if (interval === 1) interval = 6;
-                else interval = Math.round(interval * ease);
-                ease = Math.max(
-                  1.3,
-                  ease + (0.1 - (3 - quality) * (0.08 + (3 - quality) * 0.02)),
-                );
-              } else {
-                interval = 0;
-                ease = Math.max(1.3, ease - 0.2);
-              }
-              const nextDate = Date.now() + interval * 86400000;
-              return {
-                ...c,
-                interval,
-                ease,
-                dueDate: nextDate,
-                nextReview: nextDate,
-              };
+      // Si tenemos bolillaId, priorizar esa, pero si no coincide o no está, buscar en todas
+      const isCorrectBolilla = b.id === activeBolillaId || !activeBolillaId;
+      
+      return {
+        ...b,
+        cards: (b.cards || []).map((c) => {
+          if (c.id === cardId) {
+            let { interval, ease } = c;
+            if (quality >= 1) {
+              if (interval === 0) interval = 1;
+              else if (interval === 1) interval = 6;
+              else interval = Math.round(interval * ease);
+              ease = Math.max(
+                1.3,
+                ease + (0.1 - (3 - quality) * (0.08 + (3 - quality) * 0.02)),
+              );
+            } else {
+              interval = 0;
+              ease = Math.max(1.3, ease - 0.2);
             }
-            return c;
-          }),
-        };
-      }
-      return b;
+            const nextDate = Date.now() + interval * 86400000;
+            return {
+              ...c,
+              interval,
+              ease,
+              dueDate: nextDate,
+              nextReview: nextDate,
+            };
+          }
+          return c;
+        }),
+      };
     });
+
     try {
       await updateDoc(doc(db, "materias", activeMateriaId), {
         bolillas: updatedBolillas,
       });
-      updateStudyStats();
+      // El onSnapshot actualizará materias localmente, luego disparamos el sync de stats
+      setTimeout(() => updateStudyStats(), 500);
     } catch (e) {
       showToast("Error al calificar tarjeta", "error");
     }
@@ -300,24 +306,33 @@ export function useFlashcards() {
   };
 
   const updateStudyStats = async () => {
-    if (!user || !userData) return;
+    if (!user) return;
     const now = new Date();
     const todayStr = now.toDateString();
-    let { streak, lastStudy } = userData;
-    if (lastStudy !== todayStr) {
-      if (
-        lastStudy === new Date(now.setDate(now.getDate() - 1)).toDateString()
-      ) {
+    
+    // Calcular dominio actual total
+    const allC = materias.flatMap((m) => (m.bolillas || []).flatMap((b) => b.cards || []));
+    const mastered = allC.filter((card) => (card.interval || 0) >= 6).length;
+    
+    const userRef = doc(db, "users", user.uid);
+    const updates = { mastered };
+
+    if (userData?.lastStudy !== todayStr) {
+      let streak = userData?.streak || 0;
+      if (userData?.lastStudy === new Date(now.setDate(now.getDate() - 1)).toDateString()) {
         streak++;
-      } else if (lastStudy !== todayStr) {
+      } else {
         streak = 1;
       }
-      lastStudy = todayStr;
-      const allC = materias.flatMap((m) => (m.bolillas || []).flatMap((b) => b.cards || []));
-      const mastered = allC.filter((c) => (c.interval || 0) >= 15).length;
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { lastStudy, streak, mastered });
-      setUserData({ ...userData, lastStudy, streak, mastered });
+      updates.lastStudy = todayStr;
+      updates.streak = streak;
+    }
+
+    try {
+      await updateDoc(userRef, updates);
+      setUserData(prev => ({ ...prev, ...updates }));
+    } catch (e) {
+      console.error("Error updating stats:", e);
     }
   };
 

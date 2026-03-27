@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function DebugLogsScreen({ debugLogs, fetchLogs, setScreen, styles }) {
+export default function DebugLogsScreen({ debugLogs, fetchLogs, styles }) {
+  const navigate = useNavigate();
   useEffect(() => {
     fetchLogs();
   }, []);
@@ -8,7 +10,7 @@ export default function DebugLogsScreen({ debugLogs, fetchLogs, setScreen, style
   return (
     <div style={{ ...styles.screen, background: "#080810", color: "#fff", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
+        <button style={styles.backBtnLight} onClick={() => navigate(-1)}>‹</button>
         <div style={styles.headerTitleLight}>Logs de Depuración 🛠️</div>
         <button 
           style={{ background: "#A29BFE", color: "#fff", border: "none", padding: "6px 12px", borderRadius: 12, fontSize: 11, fontWeight: 700 }}

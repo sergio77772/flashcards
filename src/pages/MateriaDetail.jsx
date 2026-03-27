@@ -1,24 +1,34 @@
 import React from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { COLORS } from "../constants";
 
-export default function MateriaDetailScreen({
-  activeMateria, activeMateriaId, color, setScreen, setDeleteConfirm,
+export default function MateriaDetail({
+  materias, setScreen, setDeleteConfirm,
   setMateriaDeadline, setNewName, startAudioRepaso, setIsExam, startQuiz, startExam,
   setActiveBolillaId, styles,
 }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const activeMateria = materias.find(m => m.id === id);
+
+  if (!activeMateria) {
+    return <div style={{ color: "#fff", padding: 20 }}>Materia no encontrada</div>;
+  }
+
   const bolillas = activeMateria.bolillas || [];
   const allCards = bolillas.flatMap(b => b.cards || []);
-  const mastered = allCards.filter(c => (c.interval || 0) >= 15).length;
+  const mastered = allCards.filter(c => (c.interval || 0) >= 6).length;
   const progressPct = allCards.length > 0 ? Math.round((mastered / allCards.length) * 100) : 0;
+  const color = COLORS[activeMateria.colorIdx] || COLORS[0];
 
   return (
     <div style={{ ...styles.screen, background: "#0d0d18" }}>
       {/* Header */}
       <div style={{ padding: "52px 20px 24px", background: `linear-gradient(160deg, ${color.bg}33, ${color.bg}11)`, borderBottom: `1px solid ${color.bg}22` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <button style={styles.backBtnLight} onClick={() => setScreen("home")}>‹</button>
+          <button style={styles.backBtnLight} onClick={() => navigate("/")}>‹</button>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#f0f0ff", letterSpacing: "-0.5px" }}>{activeMateria.name}</div>
-          <button style={styles.deleteBtnHeader} onClick={() => setDeleteConfirm({ type: "materia", id: activeMateriaId })}>🗑</button>
+          <button style={styles.deleteBtnHeader} onClick={() => setDeleteConfirm({ type: "materia", id: id })}>🗑</button>
         </div>
 
         {/* Stats strip */}
@@ -41,7 +51,7 @@ export default function MateriaDetailScreen({
           <input 
             type="date" 
             value={activeMateria.examDate || ""} 
-            onChange={(e) => setMateriaDeadline(e.target.value)}
+            onChange={(e) => setMateriaDeadline(id, e.target.value)}
             style={{ 
               background: "transparent", 
               border: "none", 
@@ -60,19 +70,19 @@ export default function MateriaDetailScreen({
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, padding: "16px 18px 8px", flexWrap: "wrap" }}>
         <button className="btn-bounce" style={{ ...styles.primaryBtn, flex: "1 0 auto", padding: "13px 10px", background: `linear-gradient(135deg, ${color.bg}, ${color.bg}aa)`, boxShadow: `0 6px 20px ${color.bg}44`, fontSize: 14 }}
-          onClick={() => { setNewName(""); setScreen("addBolilla"); }}>
+          onClick={() => { setNewName(""); navigate(`/add-bolilla/${id}`); }}>
           + Bolilla
         </button>
         <button className="btn-bounce" style={{ ...styles.primaryBtn, flex: "1 0 auto", padding: "13px 10px", background: "rgba(255,255,255,0.06)", color: "#c0c0e0", border: "1px solid rgba(255,255,255,0.08)", fontSize: 14 }}
-          onClick={() => startAudioRepaso("materia")}>
+          onClick={() => { startAudioRepaso("materia"); navigate("/audio-repaso"); }}>
           🎧 Audio
         </button>
         <button className="btn-bounce" style={{ ...styles.primaryBtn, flex: "1 0 auto", padding: "13px 10px", background: "rgba(78,205,196,0.15)", color: "#4ecdc4", border: "1px solid rgba(78,205,196,0.25)", fontSize: 14 }}
-          onClick={() => { setIsExam(false); startQuiz("materia"); }}>
+          onClick={() => { setIsExam(false); startQuiz("materia", materias, id); navigate("/quiz"); }}>
           🧠 Test
         </button>
         <button className="btn-bounce" style={{ ...styles.primaryBtn, flex: "1 0 auto", padding: "13px 10px", background: "rgba(255,255,255,0.06)", color: "#c0c0e0", border: "1px solid rgba(255,255,255,0.08)", fontSize: 14 }}
-          onClick={() => startExam("materia")}>
+          onClick={() => { startExam("materia", materias, id); navigate("/quiz"); }}>
           📝 Exam
         </button>
       </div>
@@ -88,12 +98,12 @@ export default function MateriaDetailScreen({
         ) : (
           bolillas.map((b) => {
             const total = (b.cards || []).length;
-            const done = (b.cards || []).filter(c => (c.interval || 0) >= 15).length;
+            const done = (b.cards || []).filter(c => (c.interval || 0) >= 6).length;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
             return (
               <div key={b.id} className="list-item" style={{ ...styles.bolillaCardBase, flexDirection: "column", alignItems: "flex-start", gap: 12, padding: "18px" }}
-                onClick={() => { setActiveBolillaId(b.id); setScreen("bolilla"); }}>
+                onClick={() => { setActiveBolillaId(b.id); navigate(`/materia/${id}/bolilla/${b.id}`); }}>
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
                   <div style={styles.itemName}>{b.name}</div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
