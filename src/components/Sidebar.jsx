@@ -18,7 +18,7 @@ const formatAiMsg = (txt) => {
   });
 };
 
-export default function Sidebar({ isOpen, onClose, logout, userData, styles }) {
+export default function Sidebar({ isOpen, onClose, logout, userData, styles, startTour }) {
   const navigate = useNavigate();
   if (!isOpen) return null;
   return (
@@ -55,6 +55,13 @@ export default function Sidebar({ isOpen, onClose, logout, userData, styles }) {
               {item.label}
             </button>
           ))}
+          <button style={{ display: "flex", alignItems: "center", gap: 14, border: "none", background: "transparent", width: "100%", padding: "13px 14px", cursor: "pointer", fontSize: 15, fontWeight: 600, color: "#8080b0", borderRadius: 14, textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "background .2s, color .2s" }}
+            onMouseEnter={e => { e.target.style.background = "rgba(255,255,255,0.05)"; e.target.style.color = "#f0f0ff"; }}
+            onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "#8080b0"; }}
+            onClick={startTour}>
+            <span style={{ fontSize: 20, width: 26, textAlign: "center" }}>✨</span>
+            Ver Tutorial
+          </button>
         </nav>
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>

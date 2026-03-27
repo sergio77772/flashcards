@@ -19,24 +19,36 @@ export const formatTime = (sec) => {
 
 export const TOUR_STEPS = [
   {
-    title: "🚀 ¡Bienvenido!",
-    msg: "Tu plataforma de estudio definitiva con Repetición Espaciada para memorizar lo que importa.",
+    title: "🚀 ¡Bienvenido a tu Academia IA!",
+    msg: "Esta no es una app de flashcards común. Es un ecosistema completo diseñado para que memorices 10 veces más rápido usando ciencia del aprendizaje.",
   },
   {
-    title: "✨ Mega-Generador IA",
-    msg: "Extrae flashcards de libros enteros (PDFs de 200+ pág) automáticamente. ¡La app procesa todo por lotes!",
+    title: "✨ Generación Masiva con IA",
+    msg: "Subí tus apuntes en PDF o fotos de tus libros. Nuestra IA analiza todo y genera cientos de tarjetas por lotes automáticamente. ¡Ahorrá horas de copiado!",
   },
   {
-    title: "👨‍🏫 Tutor Inteligente",
-    msg: "¿Dudas? Chatea con tu Tutor IA. Podés mandarle texto o fotos de tus apuntes y te explica al detalle.",
+    title: "📂 Organización por Bolillas",
+    msg: "Estructurá tu materia en bolillas o temas. Cada bolilla tiene su propia barra de progreso y dominio, permitiéndote identificar qué temas necesitan más refuerzo.",
   },
   {
-    title: "🎧 Audio-Repaso 2.0",
-    msg: "Escuchá tus tarjetas sin manos. La app avanza sola y te da tiempo para pensar antes de darte la respuesta.",
+    title: "🪄 Mejora Mágica Individual",
+    msg: "¿Un concepto es difícil? Tocá la varita mágica (🪄) en cualquier tarjeta para obtener una explicación profunda, ejemplos reales y reglas mnemotécnicas personalizadas.",
   },
   {
-    title: "📈 Progreso Real",
-    msg: "Mira tu racha de estudio y cuántas tarjetas has dominado. ¡Mantené tu cerebro en forma!",
+    title: "🏆 Gamificación y Niveles",
+    msg: "Cada tarjeta que estudias te da XP. Subí de nivel, mantené tu racha de días y desbloqueá logros exclusivos. ¡Convertí el estudio en un juego!",
+  },
+  {
+    title: "👨‍🏫 Tu Tutor Personal 24/7",
+    msg: "¿No entendés algo? Hablá con el Tutor IA. Podés enviarle capturas de pantalla o texto, y te explicará cualquier tema como si fuera un profesor particular.",
+  },
+  {
+    title: "🎧 Audio-Repaso Manos Libres",
+    msg: "Ideal para el gimnasio o el viaje. Escuchá tus tarjetas, pensá la respuesta y la app te dirá el dorso automáticamente. ¡Estudiá sin mirar la pantalla!",
+  },
+  {
+    title: "🧠 Repetición Espaciada (SRS)",
+    msg: "Nuestro algoritmo calcula exactamente cuándo debés repasar cada tarjeta. Una tarjeta se considera 'Dominada' tras varios aciertos. ¡Confiá en el proceso!",
   },
 ];
 export const STUDY_TIPS = [

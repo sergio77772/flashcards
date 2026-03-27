@@ -200,6 +200,35 @@ export function useAiGenerator(showToast) {
     setAiTipsLoading(false);
   };
 
+  const enhanceFlashcard = async (front, back) => {
+    if (!aiApiKey) {
+      showToast("Falta API Key", "error");
+      return null;
+    }
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `Actúa como un experto en educación. Para la siguiente flashcard (pregunta y respuesta), genera:
+        1. Una EXPLICACIÓN detallada pero clara.
+        2. Un EJEMPLO práctico del mundo real.
+        3. Una MNEMOTECNIA (truco de memoria) creativa para recordarla.
+        
+        Usa formato JSON puro: { "explanation": "...", "example": "...", "mnemonic": "..." }
+        
+        Flashcard:
+        Front: ${front}
+        Back: ${back}`;
+
+      const res = await model.generateContent(prompt);
+      const text = res.response.text();
+      const cleanJson = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
+      return JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("Error al mejorar flashcard:", e);
+      return null;
+    }
+  };
+
   const askAiTutor = async (q, img = null) => {
     if (!aiApiKey || !q.trim()) return;
     setChatLoading(true);
@@ -255,6 +284,7 @@ export function useAiGenerator(showToast) {
     generateWithAI,
     generateStudyTips,
     askAiTutor,
+    enhanceFlashcard,
     toggleSelectSuggestion,
     updateSuggestion,
     removeSuggestion,

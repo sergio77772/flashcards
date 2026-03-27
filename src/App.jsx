@@ -71,7 +71,7 @@ export default function App() {
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
     aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips,
-    askAiTutor, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
+    askAiTutor, enhanceFlashcard, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
   } = useAiGenerator(showToast);
 
   const activeMateria = materias.find((m) => m.id === activeMateriaId);
@@ -102,6 +102,7 @@ export default function App() {
       <Sidebar 
         isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} 
         setScreen={setScreen} logout={logout} userData={userData} styles={styles} 
+        startTour={() => { setIsTourOpen(true); setTourIdx(0); setIsMenuOpen(false); }}
       />
       {isTourOpen && <TourModal tourSteps={TOUR_STEPS} tourIdx={tourIdx} setTourIdx={setTourIdx} setIsTourOpen={setIsTourOpen} styles={styles} />}
       {toast && <div className="toast-in" style={{ ...styles.toast, background: toast.type === "error" ? "#FF6B6B" : "#4ECDC4" }}>{toast.msg}</div>}
@@ -135,6 +136,7 @@ export default function App() {
             setIsExam={setIsExam} startQuiz={startQuiz}
             startExam={startExam} startStudy={startStudy} setAiSuggestions={setAiSuggestions}
             setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
+            enhanceFlashcard={enhanceFlashcard}
           />
         } />
 
