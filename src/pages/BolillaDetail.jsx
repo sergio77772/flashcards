@@ -6,6 +6,7 @@ export default function BolillaDetail({
   materias, setScreen, setDeleteConfirm, setIsExam,
   startQuiz, startExam, startStudy, setAiSuggestions, setCardFront, setCardBack, setEditingCardId,
   enhanceFlashcard,
+  studyMode, setStudyMode,
   styles,
 }) {
   const { materiaId, bolillaId } = useParams();
@@ -92,19 +93,43 @@ export default function BolillaDetail({
           <div style={{ fontSize: 11, color: "#5a5a7a", marginTop: 2, fontWeight: 600, letterSpacing: 0.5 }}>TARJETAS</div>
         </div>
         {cards.length > 0 && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn-bounce" style={{ ...styles.studyBtn, background: "rgba(78,205,196,0.15)", color: "#4ecdc4", border: "1px solid rgba(78,205,196,0.25)" }}
-              onClick={() => { setIsExam(false); startQuiz("bolilla", materias, materiaId, bolillaId); navigate("/quiz"); }}>
-              🧠 Test
-            </button>
-            <button className="btn-bounce" style={{ ...styles.studyBtn, background: "rgba(255,255,255,0.06)", color: "#e0e0ff", border: "1px solid rgba(255,255,255,0.1)" }}
-              onClick={() => { startExam("bolilla", materias, materiaId, bolillaId); navigate("/quiz"); }}>
-              📝 Exam
-            </button>
-            <button className="btn-bounce" style={{ ...styles.studyBtn, background: `${color.bg}22`, color: color.bg, border: `1px solid ${color.bg}44` }}
-              onClick={() => { startStudy(cards); navigate(`/materia/${materiaId}/study/${bolillaId}`); }}>
-              ▶ Estudiar
-            </button>
+          <div style={{ display: "flex", gap: 8, flexDirection: "column", flex: 1 }}>
+            {/* Study Mode Selector */}
+            <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 14, gap: 4 }}>
+              {[
+                { id: "normal", label: "Normal", icon: "📋" },
+                { id: "random", label: "Aleatorio", icon: "🔀" },
+                { id: "smart", label: "Inteligente", icon: "🧠" },
+              ].map(mode => (
+                <button key={mode.id}
+                  style={{ 
+                    flex: 1, border: "none", padding: "8px 4px", borderRadius: 10, cursor: "pointer", fontSize: 11, fontWeight: 700, 
+                    background: studyMode === mode.id ? "rgba(124,111,255,0.1)" : "transparent",
+                    color: studyMode === mode.id ? "#7c6fff" : "#5a5a7a",
+                    transition: "all 0.2s"
+                  }}
+                  onClick={() => setStudyMode(mode.id)}
+                >
+                  <div style={{ fontSize: 16, marginBottom: 2 }}>{mode.icon}</div>
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-bounce" style={{ ...styles.studyBtn, background: "rgba(78,205,196,0.15)", color: "#4ecdc4", border: "1px solid rgba(78,205,196,0.25)", flex: 1 }}
+                onClick={() => { setIsExam(false); startQuiz("bolilla", materias, materiaId, bolillaId); navigate("/quiz"); }}>
+                🧠 Test
+              </button>
+              <button className="btn-bounce" style={{ ...styles.studyBtn, background: "rgba(255,255,255,0.06)", color: "#e0e0ff", border: "1px solid rgba(255,255,255,0.1)", flex: 1 }}
+                onClick={() => { startExam("bolilla", materias, materiaId, bolillaId); navigate("/quiz"); }}>
+                📝 Exam
+              </button>
+              <button className="btn-bounce" style={{ ...styles.studyBtn, background: `${color.bg}22`, color: color.bg, border: `1px solid ${color.bg}44`, flex: 1 }}
+                onClick={() => { startStudy(cards); navigate(`/materia/${materiaId}/study/${bolillaId}`); }}>
+                ▶ Estudiar
+              </button>
+            </div>
           </div>
         )}
       </div>

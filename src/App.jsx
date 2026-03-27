@@ -74,12 +74,31 @@ export default function App() {
     askAiTutor, enhanceFlashcard, toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
   } = useAiGenerator(showToast);
 
+  const [studyMode, setStudyMode] = useState("normal"); // normal, random, smart
+
   const activeMateria = materias.find((m) => m.id === activeMateriaId);
   const activeBolilla = activeMateria?.bolillas?.find((b) => b.id === activeBolillaId);
   const color = COLORS[activeMateria?.colorIdx] || COLORS[0];
-  const activeQueue = (screen === "bolilla" || screen === "study" || screen === "quiz") 
-    ? (activeBolilla?.cards || [])
-    : (activeMateria?.bolillas?.flatMap(b => b.cards || []) || []);
+
+  const rawQueue = React.useMemo(() => {
+    return (screen === "bolilla" || screen === "study" || screen === "quiz") 
+      ? (activeBolilla?.cards || [])
+      : (activeMateria?.bolillas?.flatMap(b => b.cards || []) || []);
+  }, [screen, activeBolilla, activeMateria]);
+
+  const activeQueue = React.useMemo(() => {
+    let q = [...rawQueue];
+    if (studyMode === "random") {
+      return q.sort(() => Math.random() - 0.5);
+    }
+    if (studyMode === "smart") {
+      return q.sort((a, b) => {
+        if ((a.interval || 0) !== (b.interval || 0)) return (a.interval || 0) - (b.interval || 0);
+        return (a.nextReview || 0) - (b.nextReview || 0);
+      });
+    }
+    return q;
+  }, [rawQueue, studyMode]);
 
   const {
     activeCardIdx, setActiveCardIdx, flipped, setFlipped, isStudyFinished, setIsStudyFinished,
@@ -137,6 +156,7 @@ export default function App() {
             startExam={startExam} startStudy={startStudy} setAiSuggestions={setAiSuggestions}
             setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
             enhanceFlashcard={enhanceFlashcard}
+            studyMode={studyMode} setStudyMode={setStudyMode}
           />
         } />
 
