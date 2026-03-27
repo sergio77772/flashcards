@@ -43,6 +43,7 @@ export default function Sidebar({ isOpen, onClose, logout, userData, styles }) {
             { icon: "🏠", label: "Inicio", path: "/" },
             { icon: "💡", label: "Consejos de Estudio", path: "/tips" },
             { icon: "👨‍🏫", label: "Tutor IA", path: "/tutor" },
+            { icon: "🏆", label: "Mis Logros", path: "/achievements" },
             { icon: "📂", label: "Mis Materias", path: "/" },
             ...(userData?.role === "admin" ? [{ icon: "🛠", label: "Panel Admin", path: "/admin" }] : []),
           ].map((item) => (

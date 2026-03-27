@@ -288,6 +288,14 @@ export function useFlashcards() {
       await updateDoc(doc(db, "materias", activeMateriaId), {
         bolillas: updatedBolillas,
       });
+
+      // Sumar XP: +10 por cada tarjeta estudiada correctamente (quality >= 1)
+      if (quality >= 1 && user) {
+        const userRef = doc(db, "users", user.uid);
+        const newXP = (userData?.xp || 0) + 10;
+        await updateDoc(userRef, { xp: newXP });
+      }
+
       // El onSnapshot actualizará materias localmente, luego disparamos el sync de stats
       setTimeout(() => updateStudyStats(), 500);
     } catch (e) {
@@ -306,16 +314,36 @@ export function useFlashcards() {
   };
 
   const updateStudyStats = async () => {
-    if (!user) return;
+    if (!user || !userData) return;
     const now = new Date();
     const todayStr = now.toDateString();
     
-    // Calcular dominio actual total
     const allC = materias.flatMap((m) => (m.bolillas || []).flatMap((b) => b.cards || []));
     const mastered = allC.filter((card) => (card.interval || 0) >= 6).length;
     
+    const xp = userData?.xp || 0;
+    const level = Math.floor(xp / 100) + 1;
+    let achievements = [...(userData?.achievements || [])];
+    
+    if (mastered >= 1 && !achievements.includes("beginner")) {
+      achievements.push("beginner");
+      showToast("¡Nuevo Logro: Principiante! 🎓");
+    }
+    if (mastered >= 10 && !achievements.includes("scholar")) {
+      achievements.push("scholar");
+      showToast("¡Nuevo Logro: Académico! 📜");
+    }
+    if (userData?.streak >= 3 && !achievements.includes("on_fire")) {
+      achievements.push("on_fire");
+      showToast("¡Nuevo Logro: En Racha! 🔥");
+    }
+
     const userRef = doc(db, "users", user.uid);
-    const updates = { mastered };
+    const updates = { mastered, level, achievements };
+
+    if (level > (userData?.level || 1)) {
+      showToast(`¡Subiste al Nivel ${level}! ✨`, "success");
+    }
 
     if (userData?.lastStudy !== todayStr) {
       let streak = userData?.streak || 0;

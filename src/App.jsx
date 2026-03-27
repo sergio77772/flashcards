@@ -28,6 +28,7 @@ import Quiz from "./pages/Quiz";
 import CardFormPage from "./pages/CardFormPage";
 import AddBolillaPage from "./pages/AddBolillaPage";
 import AddMateriaPage from "./pages/AddMateriaPage";
+import Achievements from "./pages/Achievements";
 
 export default function App() {
   const [screen, setScreen] = useState("home");
@@ -209,6 +210,12 @@ export default function App() {
           <TutorScreen 
             styles={styles} setScreen={() => {}} 
             chatHistory={chatHistory} loading={chatLoading} askTutor={askAiTutor} 
+          />
+        } />
+
+        <Route path="/achievements" element={
+          <Achievements 
+            styles={styles} userData={userData} 
           />
         } />
 

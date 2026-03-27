@@ -3,7 +3,11 @@ import React from "react";
 export default function Dashboard({ materias, userData, styles }) {
   const allCards = materias.flatMap((m) => m.bolillas || []).flatMap((b) => b.cards || []);
   const totalCards = allCards.length;
-  const mastered = allCards.filter((c) => (c.interval || 0) >= 15).length;
+  const mastered = allCards.filter((c) => (c.interval || 0) >= 6).length;
+  const xp = userData?.xp || 0;
+  const level = userData?.level || 1;
+  const currentLevelXP = xp % 100;
+  const xpPct = (currentLevelXP / 100) * 100;
 
   const upcoming = Array(7).fill(0);
   allCards.forEach((c) => {
@@ -26,12 +30,29 @@ export default function Dashboard({ materias, userData, styles }) {
 
   return (
     <div style={styles.dashboardCard}>
+      {/* Level & XP */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, padding: "16px", background: "rgba(124,111,255,0.06)", borderRadius: 20, border: "1px solid rgba(124,111,255,0.15)" }}>
+        <div style={{ width: 50, height: 50, borderRadius: 16, background: "linear-gradient(135deg, #7c6fff, #5a4fd4)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 16px rgba(124,111,255,0.3)" }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.6)", marginBottom: -2 }}>LVL</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{level}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, alignItems: "flex-end" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#f0f0ff" }}>Nivel {level}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#7c6fff" }}>{currentLevelXP} / 100 XP</div>
+          </div>
+          <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${xpPct}%`, background: "linear-gradient(90deg, #7c6fff, #4ecdc4)", borderRadius: 3, transition: "width 0.8s ease-out" }} />
+          </div>
+        </div>
+      </div>
+
       {/* Top stats */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         {[
           { val: `${userData?.streak || 0}`, icon: "🔥", label: "Racha" },
           { val: mastered, icon: "✅", label: "Dominadas" },
-          { val: totalCards, icon: "📚", label: "Total" },
+          { val: xp, icon: "✨", label: "Total XP" },
         ].map((s, i) => (
           <div key={i} style={{ flex: 1, background: "rgba(255,255,255,0.04)", borderRadius: 16, padding: "14px 10px", border: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
             <div style={{ fontSize: 11, color: "#5a5a7a", fontWeight: 700, letterSpacing: 1 }}>{s.icon}</div>
