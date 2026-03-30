@@ -364,6 +364,22 @@ export function useFlashcards() {
     }
   };
 
+  const addXp = async (amount) => {
+    if (!user || !userData) return;
+    const newXP = (userData.xp || 0) + amount;
+    const newLevel = Math.floor(newXP / 100) + 1;
+    const userRef = doc(db, "users", user.uid);
+    try {
+      await updateDoc(userRef, { xp: newXP, level: newLevel });
+      if (newLevel > (userData.level || 1)) {
+        showToast(`¡Subiste al Nivel ${newLevel}! ✨`, "success");
+      }
+      setUserData(prev => ({ ...prev, xp: newXP, level: newLevel }));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const openAdmin = async () => {
     const q = query(collection(db, "users"));
     const snap = await getDocs(q);
@@ -430,5 +446,6 @@ export function useFlashcards() {
     debugLogs,
     fetchDebugLogs,
     trackActivity,
+    addXp,
   };
 }

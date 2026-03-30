@@ -250,6 +250,67 @@ export function useAiGenerator(showToast) {
     }
   };
 
+  const generateBolillaSummary = async (cards) => {
+    if (!aiApiKey) {
+      showToast("Falta API Key", "error");
+      return null;
+    }
+    if (!cards || cards.length === 0) return null;
+    
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `Actúa como un profesor experto y apasionado. Aquí tienes todas las preguntas y respuestas clave de este tema/bolilla:
+        
+        ${cards.map(c => `Q: ${c.front} | A: ${c.back}`).join('\n')}
+        
+        Tu tarea es escribir un "Resumen Panorámico" (The Big Picture). Conecta todos estos conceptos de forma lógica, como si le contaras una historia fascinante a un alumno para que entienda cómo se relacionan entre sí. 
+        Usa formato Markdown con negritas y subtítulos si hace falta. Explica el panorama general.`;
+
+      const res = await model.generateContent(prompt);
+      return res.response.text();
+    } catch (e) {
+      console.error("Error al generar resumen:", e);
+      showToast("Error al conectar las tarjetas", "error");
+      return null;
+    }
+  };
+
+  const generateBossBattle = async (cardsStr) => {
+    if (!aiApiKey) {
+      showToast("Falta API Key", "error");
+      return null;
+    }
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `Eres la IA "Jefe Final" en un videojuego de estudio.
+        Crea 5 a 8 preguntas desafiantes ("tramposas") de opción múltiple, usando ESTOS TEMAS EXCLUSIVAMENTE:
+        
+        ${cardsStr}
+        
+        Debes devolver el resultado como ARRAY puro de JSON, respetando exactamente esta estructura:
+        [
+          {
+            "q": "Pregunta del Jefe IA...",
+            "options": ["Respuesta Correcta", "Trampa muy sutil", "Trampa Obvia", "Casi correcta"],
+            "correctIndex": 0,
+            "taunt": "Frase provocadora del jefe burlándose inteligentemente..."
+          }
+        ]
+        IMPORTANTE: Responde ÚNICAMENTE con el bloque JSON. Sin markdown, sin explicaciones.`;
+
+      const res = await model.generateContent(prompt);
+      let text = res.response.text();
+      text = text.substring(text.indexOf("["), text.lastIndexOf("]") + 1);
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Error en boss battle:", e);
+      showToast("Error generando el Jefe Final", "error");
+      return null;
+    }
+  };
+
   const askAiTutor = async (q, img = null) => {
     if (!aiApiKey || !q.trim()) return;
     setChatLoading(true);
@@ -357,6 +418,8 @@ export function useAiGenerator(showToast) {
     generateWithAI,
     generateStudyTips,
     askCustomTip,
+    generateBolillaSummary,
+    generateBossBattle,
     askAiTutor,
     enhanceFlashcard,
     startConversation,

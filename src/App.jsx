@@ -30,6 +30,7 @@ import AddBolillaPage from "./pages/AddBolillaPage";
 import AddMateriaPage from "./pages/AddMateriaPage";
 import Achievements from "./pages/Achievements";
 import ConversationMode from "./pages/ConversationMode";
+import BattleMode from "./pages/BattleMode";
 
 export default function App() {
   const [screen, setScreen] = useState("home");
@@ -61,7 +62,7 @@ export default function App() {
     user, userData, materias, loading, authLoading, allUsers, toast,
     loginGoogle, logout, addMateria, deleteMateria, addBolilla, deleteBolilla,
     addCard, addCards, saveEditCard, deleteCard, rateCard, setMateriaDeadline,
-    updateStudyStats, openAdmin, changeUserRole, setToast, showToast, debugLogs, fetchDebugLogs, trackActivity
+    updateStudyStats, openAdmin, changeUserRole, setToast, showToast, debugLogs, fetchDebugLogs, trackActivity, addXp
   } = flashcards;
 
   const {
@@ -71,7 +72,7 @@ export default function App() {
 
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
-    aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips, askCustomTip,
+    aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips, askCustomTip, generateBolillaSummary, generateBossBattle,
     askAiTutor, enhanceFlashcard, startConversation, answerConversation, convHistory, setConvHistory, convLoading,
     toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
   } = useAiGenerator(showToast);
@@ -157,7 +158,7 @@ export default function App() {
             setIsExam={setIsExam} startQuiz={startQuiz}
             startExam={startExam} startStudy={startStudy} setAiSuggestions={setAiSuggestions}
             setCardFront={setCardFront} setCardBack={setCardBack} setEditingCardId={setEditingCardId}
-            enhanceFlashcard={enhanceFlashcard}
+            enhanceFlashcard={enhanceFlashcard} generateBolillaSummary={generateBolillaSummary}
             studyMode={studyMode} setStudyMode={setStudyMode}
           />
         } />
@@ -260,6 +261,13 @@ export default function App() {
               trackActivity("ask_tutor", q);
               askAiTutor(q, img);
             }} 
+          />
+        } />
+
+        <Route path="/battle" element={
+          <BattleMode 
+            materias={materias} generateBossBattle={generateBossBattle} 
+            styles={styles} trackActivity={trackActivity} addXp={addXp} 
           />
         } />
 

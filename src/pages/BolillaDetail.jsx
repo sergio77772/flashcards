@@ -5,18 +5,21 @@ import { COLORS } from "../constants";
 export default function BolillaDetail({
   materias, setScreen, setDeleteConfirm, setIsExam,
   startQuiz, startExam, startStudy, setAiSuggestions, setCardFront, setCardBack, setEditingCardId,
-  enhanceFlashcard,
+  enhanceFlashcard, generateBolillaSummary,
   studyMode, setStudyMode,
   styles,
 }) {
   const { materiaId, bolillaId } = useParams();
   const navigate = useNavigate();
   const [enrichment, setEnrichment] = React.useState(null);
-  const [enrichLoading, setEnrichLoading] = React.useState(null); // id del card cargando
-  
+  const [enrichLoading, setEnrichLoading] = React.useState(null);
+  const [summaryText, setSummaryText] = React.useState(null);
+  const [summaryLoading, setSummaryLoading] = React.useState(false);
+
   const activeMateria = materias.find(m => m.id === materiaId);
   const activeBolilla = activeMateria?.bolillas?.find(b => b.id === bolillaId);
   const color = COLORS[activeMateria?.colorIdx] || COLORS[0];
+  const cards = activeBolilla?.cards || [];
 
   const handleEnrich = async (card) => {
     setEnrichLoading(card.id);
@@ -25,11 +28,33 @@ export default function BolillaDetail({
     setEnrichLoading(null);
   };
 
+  const handleGenerateSummary = async () => {
+    setSummaryLoading(true);
+    // Analizar TODAS las flashcards a pedido del usuario completo
+    const text = await generateBolillaSummary(cards);
+    if (text) setSummaryText(text);
+    setSummaryLoading(false);
+  };
+
+  const formatAiMsg = (txt) => {
+    if (!txt) return "";
+    const parts = txt.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={i} style={{ color: "#fff" }}>{part.slice(2, -2)}</strong>;
+      }
+      return part.split("\n").map((line, j) => (
+        <React.Fragment key={`${i}-${j}`}>
+          {line.startsWith("- ") ? <li style={{ marginLeft: 20, marginBottom: 4 }}>{line.slice(2)}</li> : line}
+          {j < part.split("\n").length - 1 && !line.startsWith("- ") && <br />}
+        </React.Fragment>
+      ));
+    });
+  };
+
   if (!activeBolilla) {
     return <div style={{ color: "#fff", padding: 20 }}>Bolilla no encontrada</div>;
   }
-
-  const cards = activeBolilla.cards || [];
 
   return (
     <div style={{ ...styles.screen, background: "#0d0d18" }}>
@@ -75,6 +100,57 @@ export default function BolillaDetail({
               onClick={() => setEnrichment(null)}
             >
               Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Loading Modal */}
+      {summaryLoading && !summaryText && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.85)", zIndex: 20000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(12px)" }}>
+          <div 
+            style={{ 
+              background: "#1a162a", borderRadius: 32, padding: "40px 24px", maxWidth: 400, width: "100%", textAlign: "center",
+              border: "1px solid rgba(255,107,107,0.4)", boxShadow: "0 25px 70px rgba(0,0,0,0.6)",
+              animation: "modalFadeUp 0.3s ease-out" 
+            }} 
+          >
+            <div className="loader-card" style={{ margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#fff", marginBottom: 10 }}>Analizando {cards.length} tarjetas...</div>
+            <div style={{ fontSize: 14, color: "#a0a0c0", lineHeight: 1.5 }}>Conectando los conceptos y armando el panorama general. Esto puede tomar unos segundos.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Modal */}
+      {summaryText && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.85)", zIndex: 20000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(12px)" }} onClick={() => setSummaryText(null)}>
+          <div 
+            style={{ 
+              background: "#1a162a", borderRadius: 32, padding: "32px 24px 24px", maxWidth: 600, width: "100%", 
+              maxHeight: "85vh", display: "flex", flexDirection: "column",
+              border: "1px solid rgba(255,107,107,0.4)", boxShadow: "0 25px 70px rgba(0,0,0,0.6)",
+              animation: "modalFadeUp 0.3s ease-out" 
+            }} 
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 24 }}>🌍</span> Resumen Panorámico
+            </div>
+            
+            <div style={{ flex: 1, overflowY: "auto", paddingRight: 10, marginBottom: 20, fontSize: 14, color: "#e0e0f5", lineHeight: 1.8 }}>
+              {formatAiMsg(summaryText)}
+            </div>
+
+            <button 
+              style={{ 
+                ...styles.primaryBtn, width: "100%", height: 50, borderRadius: 16, fontSize: 14, fontWeight: 800,
+                background: "linear-gradient(90deg, #ff6b6b, #e05555)", border: "none", color: "#fff",
+                boxShadow: "0 8px 20px rgba(255,107,107,0.3)"
+              }} 
+              onClick={() => setSummaryText(null)}
+            >
+              Cerrar
             </button>
           </div>
         </div>
@@ -137,15 +213,28 @@ export default function BolillaDetail({
           </div>
 
           {/* 3. Specialized Modes */}
-          <button className="btn-bounce" 
-            style={{ 
-              ...styles.studyBtn, width: "100%", padding: "14px", 
-              background: "linear-gradient(135deg, rgba(124,111,255,0.15), rgba(78,205,196,0.05))",
-              border: "1px solid rgba(124,111,255,0.25)", color: "#b0a8ff", fontSize: 14, fontWeight: 700, gap: 12
-            }}
-            onClick={() => navigate(`/materia/${materiaId}/bolilla/${bolillaId}/conversation`)}>
-            🎙 Modo Conversación (Examen Oral)
-          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn-bounce" 
+              style={{ 
+                ...styles.studyBtn, flex: 1, padding: "14px", 
+                background: "linear-gradient(135deg, rgba(124,111,255,0.15), rgba(78,205,196,0.05))",
+                border: "1px solid rgba(124,111,255,0.25)", color: "#b0a8ff", fontSize: 13, fontWeight: 700, gap: 12
+              }}
+              onClick={() => navigate(`/materia/${materiaId}/bolilla/${bolillaId}/conversation`)}>
+              🎙 Examen Oral
+            </button>
+
+            <button className="btn-bounce" 
+              style={{ 
+                ...styles.studyBtn, flex: 1, padding: "14px", 
+                background: "linear-gradient(135deg, rgba(255,107,107,0.15), rgba(240,165,0,0.05))",
+                border: "1px solid rgba(255,107,107,0.25)", color: "#ff8b8b", fontSize: 13, fontWeight: 700, gap: 12
+              }}
+              disabled={summaryLoading}
+              onClick={handleGenerateSummary}>
+              {summaryLoading ? "..." : "🌍 Resumen Panorámico"}
+            </button>
+          </div>
 
           {/* 4. AI Generator */}
           <button className="btn-bounce" 
