@@ -18,9 +18,11 @@ export default function ConversationMode({
   const activeBolilla = activeMateria?.bolillas?.find(b => b.id === bolillaId);
   const cards = activeBolilla?.cards || [];
   const color = COLORS[activeMateria?.colorIdx] || COLORS[0];
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
-    if (cards.length > 0 && convHistory.length === 0) {
+    if (cards.length > 0 && convHistory.length === 0 && !hasStartedRef.current) {
+      hasStartedRef.current = true;
       startConversation(cards[0], userData?.name || "Alumno");
     }
   }, [cards, convHistory, userData]);

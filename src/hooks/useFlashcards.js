@@ -382,6 +382,25 @@ export function useFlashcards() {
     setDebugLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
   };
 
+  const trackActivity = (actionType, inputData) => {
+    if (!user) return;
+    // Fire-and-forget background task
+    setTimeout(async () => {
+      try {
+        const { addDoc, collection } = await import("firebase/firestore");
+        await addDoc(collection(db, "activity_logs"), {
+          userId: user.uid,
+          userName: user.displayName || user.email,
+          actionType,
+          inputData,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("No se pudo registrar la actividad:", e);
+      }
+    }, 0);
+  };
+
   return {
     user,
     userData,
@@ -410,5 +429,6 @@ export function useFlashcards() {
     setUserData,
     debugLogs,
     fetchDebugLogs,
+    trackActivity,
   };
 }

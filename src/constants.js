@@ -23,6 +23,10 @@ export const TOUR_STEPS = [
     msg: "Esta no es una app de flashcards común. Es un ecosistema completo diseñado para que memorices 10 veces más rápido usando ciencia del aprendizaje.",
   },
   {
+    title: "🆘 ¿No podés estudiar?",
+    msg: "Si te sentís bloqueado o distraído, andá a 'Consejos de Estudio' en el menú. Contale tu dificultad a la IA y recibí un consejo personalizado al instante para destrabarte.",
+  },
+  {
     title: "✨ Generación Masiva con IA",
     msg: "Subí tus apuntes en PDF o fotos de tus libros. Nuestra IA analiza todo y genera cientos de tarjetas por lotes automáticamente. ¡Ahorrá horas de copiado!",
   },

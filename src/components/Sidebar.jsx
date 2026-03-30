@@ -82,9 +82,22 @@ export default function Sidebar({ isOpen, onClose, logout, userData, styles, sta
   );
 }
 
-export function TipsScreen({ styles, aiTips, loading, generateTips }) {
+export function TipsScreen({ styles, aiTips, loading, generateTips, askCustomTip }) {
   const navigate = useNavigate();
+  const [difficulty, setDifficulty] = React.useState("");
+  const [customTip, setCustomTip] = React.useState(null);
+  const [customLoading, setCustomLoading] = React.useState(false);
+
   React.useEffect(() => { if (aiTips.length === 0) generateTips(); }, []);
+
+  const handleCustomSubmit = async () => {
+    if (!difficulty.trim() || customLoading) return;
+    setCustomLoading(true);
+    const res = await askCustomTip(difficulty);
+    setCustomTip(res);
+    setCustomLoading(false);
+  };
+
   return (
     <div style={{ ...styles.screen, background: "#0d0d18" }}>
       <div style={{ padding: "52px 20px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -92,6 +105,36 @@ export function TipsScreen({ styles, aiTips, loading, generateTips }) {
         <div style={styles.headerTitleLight}>Consejos de Estudio 🧠</div>
       </div>
       <div style={{ padding: "16px 18px 100px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+        
+        {/* NO PUEDO ESTUDIAR SECTION */}
+        <div style={{ background: "rgba(255,107,107,0.05)", border: "1px solid rgba(255,107,107,0.15)", borderRadius: 20, padding: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#ff6b6b", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>🆘</span> ¿No podés estudiar?
+          </div>
+          <div style={{ fontSize: 13, color: "#d0d0f0", marginBottom: 12 }}>Contame qué te lo impide y la IA te dará un consejo práctico e inmediato.</div>
+          
+          <div style={{ display: "flex", gap: 8 }}>
+            <input 
+              style={{ flex: 1, padding: "12px 16px", borderRadius: 14, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,255,255,0.03)", color: "#fff", outline: "none", fontSize: 14, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              placeholder="Ej: Me distraigo con el celular..."
+              value={difficulty}
+              onChange={e => setDifficulty(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleCustomSubmit()}
+            />
+            <button className="btn-bounce" style={{ background: "linear-gradient(135deg, #ff6b6b, #e05555)", color: "#fff", border: "none", borderRadius: 14, padding: "0 18px", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(255,107,107,0.3)" }}
+              onClick={handleCustomSubmit} disabled={customLoading}>
+              {customLoading ? "..." : "Ayuda"}
+            </button>
+          </div>
+
+          {customTip && (
+            <div style={{ marginTop: 16, padding: 16, background: "rgba(255,255,255,0.05)", borderRadius: 14, borderLeft: "3px solid #ff6b6b", animation: "slideIn 0.3s ease-out" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#ff6b6b", letterSpacing: 1, marginBottom: 8 }}>CONSEJO PERSONALIZADO</div>
+              <div style={{ fontSize: 14, color: "#f0f0ff", lineHeight: 1.6 }}>{formatAiMsg(customTip)}</div>
+            </div>
+          )}
+        </div>
+
         <button className="btn-bounce" style={{ ...styles.primaryBtn, background: loading ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg, #7c6fff, #5a4fd4)", boxShadow: loading ? "none" : "0 8px 24px rgba(124,111,255,0.3)", fontSize: 14 }}
           onClick={generateTips} disabled={loading}>
           {loading ? "🔄 Generando..." : "✨ Nuevos consejos con IA"}

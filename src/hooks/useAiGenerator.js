@@ -200,6 +200,27 @@ export function useAiGenerator(showToast) {
     setAiTipsLoading(false);
   };
 
+  const askCustomTip = async (difficulty) => {
+    if (!aiApiKey) {
+      showToast("Falta API Key", "error");
+      return null;
+    }
+    try {
+      const genAI = new GoogleGenerativeAI(aiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `Soy un estudiante y tengo la siguiente dificultad para estudiar: "${difficulty}". 
+        Dame 1 o 2 consejos sumamente prácticos, empáticos y motivadores para ayudarme a superarlo en este instante. 
+        Evita introducciones largas, sé directo y aplicable.`;
+      
+      const res = await model.generateContent(prompt);
+      return res.response.text();
+    } catch (e) {
+      console.error(e);
+      showToast("Error al pedir consejo", "error");
+      return "Hubo un error al generar tu consejo. Por favor intenta más tarde.";
+    }
+  };
+
   const enhanceFlashcard = async (front, back) => {
     if (!aiApiKey) {
       showToast("Falta API Key", "error");
@@ -335,6 +356,7 @@ export function useAiGenerator(showToast) {
     handleImageUpload,
     generateWithAI,
     generateStudyTips,
+    askCustomTip,
     askAiTutor,
     enhanceFlashcard,
     startConversation,

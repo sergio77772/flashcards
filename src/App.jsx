@@ -61,7 +61,7 @@ export default function App() {
     user, userData, materias, loading, authLoading, allUsers, toast,
     loginGoogle, logout, addMateria, deleteMateria, addBolilla, deleteBolilla,
     addCard, addCards, saveEditCard, deleteCard, rateCard, setMateriaDeadline,
-    updateStudyStats, openAdmin, changeUserRole, setToast, showToast, debugLogs, fetchDebugLogs
+    updateStudyStats, openAdmin, changeUserRole, setToast, showToast, debugLogs, fetchDebugLogs, trackActivity
   } = flashcards;
 
   const {
@@ -71,7 +71,7 @@ export default function App() {
 
   const {
     aiApiKey, setAiApiKey, aiInputText, setAiInputText, aiImage, setAiImage, aiLoading, setAiLoading, aiSuggestions, setAiSuggestions,
-    aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips,
+    aiTips, aiTipsLoading, chatHistory, chatLoading, handlePdfUpload, handleImageUpload, generateWithAI, generateStudyTips, askCustomTip,
     askAiTutor, enhanceFlashcard, startConversation, answerConversation, convHistory, setConvHistory, convLoading,
     toggleSelectSuggestion, updateSuggestion, removeSuggestion, addManualSuggestion, aiBatchProgress,
   } = useAiGenerator(showToast);
@@ -167,7 +167,10 @@ export default function App() {
             materias={materias} styles={styles}
             convHistory={convHistory} setConvHistory={setConvHistory}
             convLoading={convLoading} startConversation={startConversation}
-            answerConversation={answerConversation}
+            answerConversation={(q, card, nextCard) => {
+              trackActivity("conversation_mode_answer", q);
+              answerConversation(q, card, nextCard);
+            }}
             userData={userData}
           />
         } />
@@ -202,7 +205,12 @@ export default function App() {
             aiApiKey={aiApiKey} setAiApiKey={setAiApiKey} aiInputText={aiInputText} setAiInputText={setAiInputText}
             aiImage={aiImage} setAiImage={setAiImage} handleImageUpload={handleImageUpload}
             aiLoading={aiLoading} aiSuggestions={aiSuggestions} setAiSuggestions={setAiSuggestions}
-            handlePdfUpload={handlePdfUpload} generateWithAI={generateWithAI} styles={styles}
+            handlePdfUpload={handlePdfUpload} 
+            generateWithAI={() => {
+              trackActivity("generate_flashcards_ai", aiInputText ? aiInputText.substring(0, 200) + (aiInputText.length > 200 ? "..." : "") : "Media upload");
+              generateWithAI();
+            }} 
+            styles={styles}
             toggleSelectSuggestion={toggleSelectSuggestion} updateSuggestion={updateSuggestion}
             removeSuggestion={removeSuggestion} addManualSuggestion={addManualSuggestion}
             aiBatchProgress={aiBatchProgress}
@@ -237,13 +245,21 @@ export default function App() {
           <TipsScreen 
             styles={styles} setScreen={() => {}} 
             aiTips={aiTips} loading={aiTipsLoading} generateTips={generateStudyTips} 
+            askCustomTip={async (q) => {
+              trackActivity("ask_custom_tip", q);
+              return await askCustomTip(q);
+            }}
           />
         } />
 
         <Route path="/tutor" element={
           <TutorScreen 
             styles={styles} setScreen={() => {}} 
-            chatHistory={chatHistory} loading={chatLoading} askTutor={askAiTutor} 
+            chatHistory={chatHistory} loading={chatLoading} 
+            askTutor={(q, img) => {
+              trackActivity("ask_tutor", q);
+              askAiTutor(q, img);
+            }} 
           />
         } />
 
