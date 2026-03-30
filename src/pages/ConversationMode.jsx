@@ -10,7 +10,9 @@ export default function ConversationMode({
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef();
+  const baseQueryRef = useRef("");
 
   const activeMateria = materias.find(m => m.id === materiaId);
   const activeBolilla = activeMateria?.bolillas?.find(b => b.id === bolillaId);
@@ -42,19 +44,34 @@ export default function ConversationMode({
     const recognition = new SpeechRecognition();
     recognition.lang = "es-ES";
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
+
+    baseQueryRef.current = query;
 
     recognition.onstart = () => {
-      // Feedback visual opcional
+      setIsListening(true);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
     };
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setQuery(transcript);
+      let currentTrans = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        currentTrans += event.results[i][0].transcript;
+      }
+      
+      const newText = baseQueryRef.current 
+        ? baseQueryRef.current + " " + currentTrans
+        : currentTrans;
+        
+      setQuery(newText);
     };
 
     recognition.onerror = (event) => {
       console.error("Speech Recognition Error", event.error);
+      setIsListening(false);
     };
 
     recognition.start();
@@ -109,13 +126,15 @@ export default function ConversationMode({
           <button 
             style={{ 
               width: 50, height: 50, borderRadius: 16, border: "none", 
-              background: "rgba(124,111,255,0.1)", color: "#7c6fff", fontSize: 22, 
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+              background: isListening ? "rgba(255,107,107,0.2)" : "rgba(124,111,255,0.1)", 
+              color: isListening ? "#ff6b6b" : "#7c6fff", fontSize: 22, 
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              animation: isListening ? "pulse 1.5s infinite" : "none"
             }}
-            onClick={startListening}
-            title="Hablar (Voice to Text)"
+            onClick={isListening ? null : startListening}
+            title={isListening ? "Escuchando..." : "Hablar (Voice to Text)"}
           >
-            🎙
+            {isListening ? "🔴" : "🎙"}
           </button>
           <input 
             style={{ 
@@ -146,6 +165,7 @@ export default function ConversationMode({
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .loading-dots:after { content: '.'; animation: dots 1.5s steps(5, end) infinite; }
         @keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%, 100% { content: '...'; } }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
       `}</style>
     </div>
   );
